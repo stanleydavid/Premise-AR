@@ -291,7 +291,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
       <button class="btn primary" id="goField" type="button">Mula di lapangan (kamera, GPS, kompas)</button>
       <button class="btn" id="goSim" type="button">Mod simulasi (tanpa kamera)</button>
     </div>
-    <p class="fine">Semua premis ialah data contoh. Di lapangan, premis contoh diletakkan di sekeliling kedudukan anda,
+    <p class="fine">Semua premis ialah data contoh, diletakkan di sekitar titik ujian 5.69479, 115.95822. Jika anda lebih 2 km dari titik itu, premis contoh diletakkan di sekeliling kedudukan anda,
       dengan Blok A di hadapan arah telefon dihalakan semasa GPS pertama kali didapati, dan Blok B di belakang anda. Rekod semakan disimpan dalam telefon ini sahaja.</p>
   </div>
 </div>
@@ -418,7 +418,10 @@ const CONDITIONS = {
   spa: ['Tiada perkhidmatan selepas 10.00 malam', 'Pekerja berpakaian seragam'],
   workshop: ['Kerja membaiki di dalam premis sahaja'],
 };
-const SIM_DS = { key: 'sim', center: { lat: 5.98045, lng: 116.07355 }, brg: 30 };
+/* Fixed test site: dummy rows are built around this point (the officer standing mid-street at the point).
+   The street direction is unknown, so it is adjustable in Tapis & tetapan and remembered on the phone. */
+const TEST_SITE = { name: 'Lokasi ujian', point: { lat: 5.6947939, lng: 115.958221 } };
+function siteDs(brg) { return { key: 'site1', site: true, brg, center: move(TEST_SITE.point, brg, -30) }; }
 const DAY = 864e5;
 const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
@@ -518,9 +521,10 @@ function startSim() {
   S.mode = 'sim'; S.camera = false; S.manualHeading = true; S.startedAt = Date.now();
   $('#hMode').textContent = 'SIMULASI';
   $('#turn').hidden = false;
-  setDataset(SIM_DS);
-  S.sim.truePos = move(SIM_DS.center, SIM_DS.brg, 30);   // mid-street, facing row A (Blok A)
-  setHeading(SIM_DS.brg + 90, true);
+  const ds = siteDs(LS.get('siteBrg', 0));
+  setDataset(ds);
+  S.sim.truePos = { ...TEST_SITE.point };                 // mid-street, facing row A (Blok A)
+  setHeading(ds.brg + 90, true);
   simTick(); setInterval(simTick, 1000);
   requestAnimationFrame(frame);
   toast('Seret skrin atau guna ◀ ▶ untuk pusing, ▲ ▼ untuk berjalan.', 4500);
@@ -557,14 +561,15 @@ function onPos(p) {
   if (!S.firstFixAt) S.firstFixAt = Date.now();
   if (!S.ds) {
     const saved = LS.get('fieldDs', null);
-    if (saved && dist(saved.center, S.pos) < 1500) { setDataset(saved); toast('Data contoh dimuatkan semula di lokasi ini.'); }
+    if (dist(TEST_SITE.point, S.pos) < 2000) { setDataset(siteDs(LS.get('siteBrg', 0))); toast(`${TEST_SITE.name} dimuatkan (${Math.round(dist(TEST_SITE.point, S.pos))} m dari titik ujian).`, 4500); }
+    else if (saved && dist(saved.center, S.pos) < 1500) { setDataset(saved); toast('Data contoh dimuatkan semula di lokasi ini.'); }
     else if (S.acc <= 40 || Date.now() - S.firstFixAt > 8000) placeAroundMe();
   }
 }
 function onGeoErr(err) {
   if (err.code === 1) {
     toast('Lokasi tidak dibenarkan. Beralih ke data simulasi.', 4500);
-    if (!S.ds) { setDataset(SIM_DS); S.pos = move(SIM_DS.center, SIM_DS.brg, -2); S.acc = null; }
+    if (!S.ds) { setDataset(siteDs(LS.get('siteBrg', 0))); S.pos = { ...TEST_SITE.point }; S.acc = null; }
   }
 }
 function placeAroundMe() {
@@ -940,6 +945,11 @@ function openFilters() {
     <section><h3>Sudut pandangan kamera</h3><div class="range"><input id="fFov" type="range" min="35" max="85" step="1" value="${S.fovH}" aria-label="Sudut pandangan kamera"><output id="oFov">${S.fovH}°</output></div>
       <p class="note">Kalibrasi: halakan ke satu kedai yang anda kenal di tepi skrin. Laraskan sehingga label jatuh di atas kedai itu.</p></section>
     ${S.mode === 'sim' ? `<label class="sw"><input id="fJitter" type="checkbox" ${S.sim.jitter ? 'checked' : ''}><span>Simulasi ralat GPS (±12 m)<small>Tunjukkan bagaimana label tersasar apabila isyarat GPS lemah di antara bangunan.</small></span></label>` : ''}
+    ${S.ds?.site ? `<section><h3>Arah jalan di ${TEST_SITE.name}</h3><div class="range"><input id="fStreet" type="range" min="0" max="175" step="5" value="${S.ds.brg}" aria-label="Arah jalan"><output id="oStreet">${S.ds.brg}° ${cardinal(S.ds.brg)}</output></div>
+      <p class="note">Titik ujian ${TEST_SITE.point.lat.toFixed(5)}, ${TEST_SITE.point.lng.toFixed(5)}. Laraskan sehingga deretan Blok A dan Blok B selari dengan jalan sebenar.
+        Cara cepat: berdiri di tepi jalan, halakan telefon sepanjang jalan, kemudian ketik butang di bawah.</p>
+      <button class="btn sm" type="button" id="fStreetHere">Guna arah telefon sekarang</button></section>` : ''}
+    ${S.mode === 'field' && !S.ds?.site && S.pos && dist(TEST_SITE.point, S.pos) < 5000 ? `<button class="btn sm" type="button" id="fSite">Guna ${TEST_SITE.name}</button>` : ''}
     ${S.mode === 'field' ? `<section><h3>Data contoh</h3><p class="note">Halakan telefon ke deretan kedai sebenar dahulu. Blok A akan diletakkan di hadapan anda dan Blok B di belakang.</p>
       <button class="btn sm" type="button" id="fPlace">Letak semula di sekeliling saya</button></section>` : ''}
   </div>`, 'Tapis dan tetapan');
@@ -953,6 +963,13 @@ function openFilters() {
   });
   $('#fJitter')?.addEventListener('change', (e) => { S.sim.jitter = e.target.checked; simTick(); });
   $('#fPlace')?.addEventListener('click', () => { placeAroundMe(); closeSheet(); });
+  const setStreet = (b) => {
+    b = ((Math.round(b / 5) * 5) % 180 + 180) % 180; LS.set('siteBrg', b); setDataset(siteDs(b));
+    $('#fStreet').value = b; $('#oStreet').textContent = `${b}° ${cardinal(b)}`;
+  };
+  $('#fStreet')?.addEventListener('input', (e) => setStreet(+e.target.value));
+  $('#fStreetHere')?.addEventListener('click', () => { setStreet(S.heading); toast('Arah jalan dikemas kini.'); });
+  $('#fSite')?.addEventListener('click', () => { setDataset(siteDs(LS.get('siteBrg', 0))); closeSheet(); toast(`${TEST_SITE.name} dimuatkan.`); });
 }
 
 function openLog() {

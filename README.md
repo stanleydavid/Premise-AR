@@ -38,7 +38,12 @@ Camera, GPS and compass only work over **HTTPS** (or `localhost`).
 
 ### Dummy data placement
 
-On the first GPS fix (field mode) 21 dummy premises are generated around the officer:
+**Fixed test site:** 5.6947939, 115.9582210 (`TEST_SITE` in `index.html`). Within 2 km of it, field mode and
+simulation load the 21 dummy premises around that point: the point is mid-street, Blok A on one side, Blok B
+on the other. Set the real street direction in *Tapis & tetapan → Arah jalan* (or "Guna arah telefon
+sekarang" while pointing along the street); it is remembered on the phone.
+
+Elsewhere, on the first GPS fix (field mode) the 21 dummy premises are generated around the officer:
 **Blok A** shophouse row ~11 m in front of the direction the phone faces, **Blok B** ~11 m behind
 (across the street), 6.5 m frontages, some first-floor units, two premises behind and two beyond
 80 m to test the radius filter. Re-place via *Tapis & tetapan → Letak semula di sekeliling saya*.
