@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d6e66">
+<title>Semak Premis AR</title>
+<style>
+/* Layout: full-screen camera stage with HUD chips on top, radar + toolbar at the bottom,
+   and one bottom sheet for list / detail / filters / log. System fonts: works offline in the field. */
+:root {
+  --bg: #f4f7f6; --surface: #ffffff; --fg: #14201e; --muted: #5a6a67; --line: #d6dfdc;
+  --accent: #0d6e66; --accent-fg: #ffffff;
+  --ok: #15803d; --warn: #b45309; --bad: #c62828;
+  --ok-bg: #e2f3e7; --warn-bg: #fcefdb; --bad-bg: #fae3e3;
+  /* AR overlay always sits on a camera image, so it keeps one dark look in both themes */
+  --ar-glass: rgba(10, 20, 19, 0.82); --ar-line: rgba(255, 255, 255, 0.2); --ar-fg: #ffffff; --ar-muted: #b9c9c6;
+  --ar-ok: #4ade80; --ar-warn: #fbbf24; --ar-bad: #ff6b6b;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px);
+  --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1615; --surface: #162120; --fg: #e6eeec; --muted: #93a4a0; --line: #283634;
+  --accent: #3cb6aa; --accent-fg: #04201d;
+  --ok: #4ade80; --warn: #fbbf24; --bad: #ff7b7b;
+  --ok-bg: #11301e; --warn-bg: #33270b; --bad-bg: #3b1616; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e1615; --surface: #162120; --fg: #e6eeec; --muted: #93a4a0; --line: #283634;
+  --accent: #3cb6aa; --accent-fg: #04201d;
+  --ok: #4ade80; --warn: #fbbf24; --bad: #ff7b7b;
+  --ok-bg: #11301e; --warn-bg: #33270b; --bad-bg: #3b1616; color-scheme: dark; }
+
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); overflow: hidden;
+  -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 2px; }
+h2, h3 { text-wrap: balance; margin: 0; }
+
+/* ---------- stage ---------- */
+#stage { position: fixed; inset: 0; background: #0b1110; overflow: hidden; touch-action: none; user-select: none; }
+#cam, #sim { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cam { object-fit: cover; }
+#labels { position: absolute; inset: 0; pointer-events: none; }
+.lbl { position: absolute; left: 0; top: 0; width: 176px; padding: 6px 9px 7px; border-radius: 10px;
+  background: var(--ar-glass); color: var(--ar-fg); border: 1.5px solid var(--ar-line);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  text-align: left; pointer-events: auto; transform-origin: 50% 100%; will-change: transform;
+  display: flex; flex-direction: column; gap: 3px; }
+.lbl::after { content: ""; position: absolute; left: 50%; bottom: -7px; margin-left: -6px;
+  border: 6px solid transparent; border-top-color: var(--ar-line); border-bottom: 0; }
+.lbl[data-st="warn"] { border-color: var(--ar-warn); }
+.lbl[data-st="bad"] { border-color: var(--ar-bad); }
+.lbl[data-st="warn"]::after { border-top-color: var(--ar-warn); }
+.lbl[data-st="bad"]::after { border-top-color: var(--ar-bad); }
+.lbl .nm { font-weight: 700; font-size: 15px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden; }
+.lbl .mt { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--ar-muted);
+  font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.lbl .st { font-weight: 700; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; color: #06130f; }
+.lbl[data-st="ok"] .st { background: var(--ar-ok); }
+.lbl[data-st="warn"] .st { background: var(--ar-warn); }
+.lbl[data-st="bad"] .st { background: var(--ar-bad); }
+.lbl .cp { color: var(--ar-warn); font-weight: 700; }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  background: var(--ar-glass); color: var(--ar-fg); border: 1px solid var(--ar-line); font-size: 12px;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ar-muted); flex: none; }
+.dot.ok { background: var(--ar-ok); } .dot.warn { background: var(--ar-warn); } .dot.bad { background: var(--ar-bad); }
+
+#hud { position: absolute; top: calc(var(--st) + 10px); left: max(12px, var(--sl)); right: max(12px, var(--sr));
+  display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; pointer-events: none; }
+#hud > div { display: flex; flex-wrap: wrap; gap: 6px; pointer-events: auto; }
+#hud .right { justify-content: flex-end; }
+#hud button.chip { cursor: pointer; }
+.chip.demo { background: #fbbf24; color: #1d1405; border-color: #fbbf24; font-weight: 700; letter-spacing: .04em; }
+#banner { position: absolute; top: calc(var(--st) + 52px); left: max(12px, var(--sl)); right: max(12px, var(--sr));
+  margin: 0 auto; max-width: 520px; padding: 8px 12px; border-radius: 10px; font-size: 13px;
+  background: rgba(120, 72, 6, 0.9); color: #fff6e3; pointer-events: none; }
+
+.edge { position: absolute; top: 58%; padding: 8px 10px; max-width: 42vw; font-size: 12px; line-height: 1.25;
+  background: var(--ar-glass); color: var(--ar-fg); border: 1px solid var(--ar-line); pointer-events: none; }
+#edgeL { left: 0; padding-left: max(10px, var(--sl)); border-radius: 0 10px 10px 0; border-left: 0; }
+#edgeR { right: 0; padding-right: max(10px, var(--sr)); border-radius: 10px 0 0 10px; border-right: 0; text-align: right; }
+.edge b { display: block; font-size: 13px; }
+
+#crowd { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--sb) + 196px); cursor: pointer; }
+#radar { position: absolute; right: max(12px, var(--sr)); bottom: calc(var(--sb) + 84px); width: 104px; height: 104px;
+  border-radius: 50%; background: var(--ar-glass); border: 1px solid var(--ar-line); cursor: pointer; }
+
+#turn { position: absolute; left: max(12px, var(--sl)); bottom: calc(var(--sb) + 84px); display: grid;
+  grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); gap: 6px; }
+#turn button { border-radius: 10px; background: var(--ar-glass); color: var(--ar-fg); border: 1px solid var(--ar-line);
+  font-size: 16px; }
+#turn .fw { grid-column: 2; grid-row: 1; } #turn .bk { grid-column: 2; grid-row: 2; }
+#turn .tl { grid-column: 1; grid-row: 2; } #turn .tr { grid-column: 3; grid-row: 2; }
+
+#bar { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+  padding: 8px max(10px, var(--sr)) calc(var(--sb) + 10px) max(10px, var(--sl));
+  background: linear-gradient(to top, rgba(6, 12, 11, 0.85), rgba(6, 12, 11, 0)); }
+#bar button { min-height: 52px; border-radius: 12px; background: var(--ar-glass); color: var(--ar-fg);
+  border: 1px solid var(--ar-line); font-size: 12.5px; font-weight: 600; line-height: 1.15; padding: 4px; }
+#bar button.hot { background: #fbbf24; color: #1d1405; border-color: #fbbf24; }
+
+/* ---------- start ---------- */
+#start { position: fixed; inset: 0; z-index: 30; overflow: auto; background: var(--bg);
+  padding: calc(var(--st) + 28px) max(20px, var(--sr)) calc(var(--sb) + 28px) max(20px, var(--sl)); }
+#start .wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+#start h1 { font-size: 30px; line-height: 1.1; margin: 4px 0 0; letter-spacing: -.01em; text-wrap: balance; }
+#start p { margin: 0; color: var(--muted); max-width: 62ch; }
+.demo-label { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 14px;
+  border-radius: 14px; background: #0f1a19; color: #fff; }
+.demo-label .lbl { position: static; transform: none; }
+.demo-label .lbl::after { display: none; }
+.demo-label small { color: #b9c9c6; font-size: 12.5px; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--fg); }
+.btn { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 50px; padding: 10px 18px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 650; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.danger { color: var(--bad); border-color: var(--bad); background: transparent; }
+.btn.sm { min-height: 40px; padding: 6px 12px; font-size: 14px; }
+.btns { display: grid; gap: 10px; }
+.fine { font-size: 13px; color: var(--muted); }
+.warnbox { padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--fg); font-size: 13.5px; }
+
+/* ---------- sheet ---------- */
+#scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.35); }
+#sheet { position: fixed; z-index: 11; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 640px; max-height: 86%;
+  overflow: auto; overscroll-behavior: contain; background: var(--bg); color: var(--fg);
+  border-radius: 18px 18px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.3);
+  padding: 8px max(16px, var(--sr)) calc(var(--sb) + 18px) max(16px, var(--sl)); }
+.grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 2px auto 10px; }
+.sh { display: flex; flex-direction: column; gap: 16px; }
+.shead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.shead h2 { font-size: 19px; }
+.x { border: 0; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; padding: 8px; }
+.ph { display: flex; flex-direction: column; gap: 4px; }
+.ph h2 { font-size: 22px; line-height: 1.2; }
+.ph .sub { margin: 0; color: var(--muted); font-size: 14px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tag { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px;
+  border-radius: 6px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+.pill { font-size: 12px; font-weight: 800; letter-spacing: .05em; padding: 3px 9px; border-radius: 6px; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); } .pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.bad { background: var(--bad-bg); color: var(--bad); }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; border-radius: 12px; overflow: hidden;
+  background: var(--line); border: 1px solid var(--line); }
+.facts div { background: var(--surface); padding: 9px 12px; min-width: 0; }
+.facts dt { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.facts dd { margin: 2px 0 0; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.facts dd small { font-weight: 500; color: var(--muted); }
+.facts .bad { color: var(--bad); } .facts .warn { color: var(--warn); }
+section h3 { font-size: 15px; margin-bottom: 8px; }
+.note { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.chk { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.chk li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+  display: grid; gap: 8px; }
+.chk li.no { border-color: var(--bad); }
+.rt { font-size: 14.5px; }
+.kind { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
+  padding: 1px 6px; border-radius: 4px; vertical-align: 1px; border: 1px solid var(--line); color: var(--muted); }
+.kind.visual { color: var(--accent); border-color: var(--accent); }
+.kind.ex { color: var(--warn); border-color: var(--warn); }
+.seg { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
+.seg button { min-height: 40px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); font-size: 13.5px;
+  font-weight: 600; padding: 0 12px; }
+.seg button[aria-pressed="true"][data-v="ok"] { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.seg button[aria-pressed="true"][data-v="no"] { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+.seg button[aria-pressed="true"][data-v="na"] { background: var(--surface); color: var(--fg); border-color: var(--fg); }
+.thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.thumbs img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line);
+  max-width: 100%; display: block; }
+label.f { display: grid; gap: 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
+label.f input, label.f select, label.f textarea { font: inherit; color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+textarea { min-height: 70px; resize: vertical; }
+.actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; position: sticky; bottom: calc(-18px - var(--sb));
+  padding: 10px 0 calc(var(--sb) + 4px); background: var(--bg); }
+.outcome { font-size: 13.5px; font-weight: 650; }
+details.pin { border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px; }
+details.pin summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+details.pin p { color: var(--muted); font-size: 13.5px; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.list button { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  text-align: left; padding: 11px 12px; background: var(--surface); border: 0; }
+.list .t { font-weight: 650; min-width: 0; }
+.list .s { display: block; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.list .d { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.list .out { opacity: .55; }
+.ldot { width: 10px; height: 10px; border-radius: 50%; }
+.ldot.ok { background: var(--ok); } .ldot.warn { background: var(--warn); } .ldot.bad { background: var(--bad); }
+.divider { padding: 6px 12px; font-size: 12px; color: var(--muted); background: var(--bg); letter-spacing: .04em;
+  text-transform: uppercase; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tg { min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.tg[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.range { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.range output { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 4.5ch; text-align: right; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.sw { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; }
+.sw input { width: 20px; height: 20px; accent-color: var(--accent); margin-top: 1px; flex: none; }
+.sw small { display: block; color: var(--muted); font-size: 12.5px; }
+.empty { padding: 18px; text-align: center; color: var(--muted); background: var(--surface); border-radius: 12px;
+  border: 1px dashed var(--line); }
+.log li { background: var(--surface); padding: 10px 12px; display: grid; gap: 2px; }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+
+#toast { position: fixed; z-index: 40; left: 50%; bottom: calc(var(--sb) + 96px); transform: translateX(-50%);
+  max-width: min(92vw, 460px); padding: 10px 14px; border-radius: 10px; background: #111c1b; color: #fff;
+  font-size: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); text-align: center; }
+@media (prefers-reduced-motion: no-preference) {
+  #sheet:not([hidden]) { animation: up .18s ease-out; }
+  @keyframes up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+}
+@media (min-width: 700px) { #bar { left: 50%; right: auto; transform: translateX(-50%); width: 640px; } }
+</style>
+</head>
+<body>
+
+<div id="stage" aria-label="Paparan kamera">
+  <video id="cam" playsinline muted autoplay hidden></video>
+  <canvas id="sim"></canvas>
+  <div id="labels"></div>
+  <div id="hud">
+    <div class="left">
+      <span class="chip demo">DATA CONTOH</span>
+      <span class="chip" id="hMode">—</span>
+    </div>
+    <div class="right">
+      <span class="chip" id="hGps"><span class="dot" id="hGpsDot"></span><span id="hGpsTxt">Mencari GPS…</span></span>
+      <span class="chip" id="hHead">—</span>
+      <button class="chip" id="hRadius" type="button">Radius 40 m</button>
+    </div>
+  </div>
+  <div id="banner" hidden></div>
+  <button class="chip" id="crowd" type="button" hidden></button>
+  <div class="edge" id="edgeL" hidden></div>
+  <div class="edge" id="edgeR" hidden></div>
+  <canvas id="radar" role="button" aria-label="Radar premis. Ketik untuk senarai." tabindex="0"></canvas>
+  <div id="turn" hidden>
+    <button class="fw" type="button" data-act="fw" aria-label="Jalan ke depan 3 meter">▲</button>
+    <button class="bk" type="button" data-act="bk" aria-label="Undur 3 meter">▼</button>
+    <button class="tl" type="button" data-act="tl" aria-label="Pusing ke kiri">◀</button>
+    <button class="tr" type="button" data-act="tr" aria-label="Pusing ke kanan">▶</button>
+  </div>
+  <nav id="bar">
+    <button type="button" id="bList">Senarai berdekatan</button>
+    <button type="button" id="bFilter">Tapis &amp; tetapan</button>
+    <button type="button" id="bUnlisted" class="hot">Premis tiada dalam senarai</button>
+    <button type="button" id="bLog">Log semakan</button>
+  </nav>
+</div>
+
+<div id="scrim" hidden></div>
+<div id="sheet" hidden role="dialog" aria-modal="true" aria-label="Butiran"><div class="grab"></div><div id="sheetBody"></div></div>
+<div id="toast" hidden role="status" aria-live="polite"></div>
+
+<div id="start">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Prototaip · Penguatkuasaan Lesen Premis</div>
+      <h1>Semak Premis AR</h1>
+    </div>
+    <p>Halakan kamera ke deretan kedai. Label menunjukkan nama premis berlesen berdekatan dan status lesennya.
+      Padankan nama pada label dengan papan tanda kedai, kemudian ketik label untuk semakan pematuhan.</p>
+    <div class="demo-label" aria-hidden="true">
+      <div class="lbl" data-st="bad"><span class="nm">Barber Gentleman KK</span>
+        <span class="mt"><span class="st">TAMAT</span><span>GUNTING</span><span>Tkt G · 18 m</span></span></div>
+      <small>Warna sempadan = status lesen. Hijau sah, kuning hampir tamat, merah tamat atau digantung.</small>
+    </div>
+    <ol class="steps">
+      <li>Berdiri di kaki lima, pegang telefon tegak.</li>
+      <li>Padankan nama label dengan papan tanda. GPS boleh tersasar 10–30 m, jadi nama ialah pengesahan.</li>
+      <li>Ketik label: semak status, tandakan senarai semak, ambil gambar bukti.</li>
+    </ol>
+    <div class="warnbox" id="secureWarn" hidden>Halaman ini tidak dibuka melalui HTTPS. Kamera, GPS dan kompas hanya
+      berfungsi melalui HTTPS (atau localhost). Mod simulasi masih boleh digunakan.</div>
+    <div class="btns">
+      <button class="btn primary" id="goField" type="button">Mula di lapangan (kamera, GPS, kompas)</button>
+      <button class="btn" id="goSim" type="button">Mod simulasi (tanpa kamera)</button>
+    </div>
+    <p class="fine">Semua premis ialah data contoh. Di lapangan, premis contoh diletakkan di sekeliling kedudukan anda,
+      dengan Blok A di hadapan arah telefon dihalakan semasa GPS pertama kali didapati, dan Blok B di belakang anda. Rekod semakan disimpan dalam telefon ini sahaja.</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Semak Premis AR — prototype. Everything is client-side; data is dummy.
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('semakPremis.v1.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('semakPremis.v1.' + k, JSON.stringify(v)); return true; } catch { return false; } },
+};
+
+/* ---------- geo ---------- */
+const RE = 6371000, D2R = Math.PI / 180, R2D = 180 / Math.PI;
+function dist(a, b) {
+  const dLat = (b.lat - a.lat) * D2R, dLng = (b.lng - a.lng) * D2R;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * D2R) * Math.cos(b.lat * D2R) * Math.sin(dLng / 2) ** 2;
+  return 2 * RE * Math.asin(Math.sqrt(s));
+}
+function bearing(a, b) {
+  const p1 = a.lat * D2R, p2 = b.lat * D2R, dl = (b.lng - a.lng) * D2R;
+  const y = Math.sin(dl) * Math.cos(p2), x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return (Math.atan2(y, x) * R2D + 360) % 360;
+}
+function move(p, brgDeg, m) {
+  const b = brgDeg * D2R;
+  return { lat: p.lat + (m * Math.cos(b) / RE) * R2D, lng: p.lng + (m * Math.sin(b) / (RE * Math.cos(p.lat * D2R))) * R2D };
+}
+const n180 = (a) => ((a % 360) + 540) % 360 - 180;
+const n360 = (a) => ((a % 360) + 360) % 360;
+const CARD = ['U', 'TL', 'T', 'TG', 'S', 'BD', 'B', 'BL'];
+const cardinal = (h) => CARD[Math.round(n360(h) / 45) % 8];
+function relWord(rel) {
+  const a = Math.abs(rel), side = rel < 0 ? 'kiri' : 'kanan';
+  if (a < 22.5) return 'di depan';
+  if (a < 67.5) return 'depan ' + side;
+  if (a < 112.5) return 'sebelah ' + side;
+  if (a < 157.5) return 'belakang ' + side;
+  return 'di belakang';
+}
+/* W3C DeviceOrientation spec: heading of the device's back (camera) from alpha/beta/gamma */
+function compassHeading(alpha, beta, gamma) {
+  const x = beta * D2R, y = gamma * D2R, z = alpha * D2R;
+  const cX = Math.cos(x), cY = Math.cos(y), cZ = Math.cos(z), sX = Math.sin(x), sY = Math.sin(y), sZ = Math.sin(z);
+  const Vx = -cZ * sY - sZ * sX * cY, Vy = -sZ * sY + cZ * sX * cY;
+  let h = Math.atan(Vx / Vy);
+  if (Vy < 0) h += Math.PI; else if (Vx < 0) h += 2 * Math.PI;
+  return h * R2D;
+}
+
+/* ---------- licence types and compliance rules (EXAMPLES — confirm with DBKK licensing) ---------- */
+const TYPES = {
+  barber: { code: 'GUNTING', label: 'Kedai gunting rambut / salun' },
+  food: { code: 'MAKANAN', label: 'Premis makanan' },
+  retail: { code: 'RUNCIT', label: 'Perniagaan runcit' },
+  spa: { code: 'SPA', label: 'Spa / refleksologi' },
+  workshop: { code: 'BENGKEL', label: 'Bengkel kenderaan' },
+};
+const COMMON_RULES = [
+  { id: 'lesen', text: 'Lesen asal dipamerkan di tempat yang mudah dilihat', kind: 'visual' },
+  { id: 'papan', text: 'Nama pada papan tanda sepadan dengan nama dalam lesen', kind: 'visual' },
+];
+const RULES = {
+  barber: [
+    { id: 'kaca', text: 'Dinding hadapan lutsinar: bahagian dalam kedai boleh dilihat dari luar (tiada cermin gelap, kabur atau ditutup pelekat)', kind: 'visual', example: true },
+    { id: 'alat', text: 'Peralatan gunting dan pisau cukur dibersihkan dan disanitasi', kind: 'manual' },
+    { id: 'masa', text: 'Waktu operasi mengikut syarat lesen', kind: 'manual' },
+  ],
+  food: [
+    { id: 'kakilima', text: 'Kaki lima tidak dihalang oleh meja, kerusi atau peralatan masak', kind: 'visual' },
+    { id: 'tifoid', text: 'Semua pengendali makanan ada suntikan tifoid dan sijil kursus pengendali makanan', kind: 'manual' },
+    { id: 'sampah', text: 'Tong sampah bertutup dan perangkap minyak berfungsi', kind: 'manual' },
+  ],
+  retail: [
+    { id: 'kakilima', text: 'Barang jualan tidak dipamerkan atau disimpan di kaki lima', kind: 'visual' },
+    { id: 'iklan', text: 'Papan iklan tambahan mempunyai permit', kind: 'manual' },
+  ],
+  spa: [
+    { id: 'kaca', text: 'Bahagian hadapan premis tidak ditutup sepenuhnya oleh cermin gelap atau langsir', kind: 'visual', example: true },
+    { id: 'bilik', text: 'Bilik rawatan tidak boleh dikunci dari dalam', kind: 'manual', example: true },
+    { id: 'pekerja', text: 'Semua pekerja mempunyai permit kerja atau dokumen yang sah', kind: 'manual' },
+  ],
+  workshop: [
+    { id: 'jalan', text: 'Kenderaan tidak dibaiki di kaki lima atau di atas jalan', kind: 'visual' },
+    { id: 'minyak', text: 'Minyak terpakai disimpan dalam bekas tertutup', kind: 'manual' },
+  ],
+};
+const rulesFor = (type) => [...COMMON_RULES, ...(RULES[type] || [])];
+
+/* ---------- dummy premises: two shophouse rows along a "street" ----------
+   side: R/L of the street direction, slot = shop number along the row (6.5 m frontage), floor 0 = ground */
+const TEMPLATES = [
+  ['Kedai Gunting Rambut Ali', 'Ali Barber Enterprise', 'barber', 'R', 0, 0, 210, 0],
+  ['Restoran Selera Sabah', 'Selera Sabah Sdn. Bhd.', 'food', 'R', 1, 0, 18, 0],
+  ['Salun Cantik Manis', 'Cantik Manis Beauty Enterprise', 'barber', 'R', 1, 1, -35, 0],
+  ['Kedai Runcit Hup Seng', 'Syarikat Hup Seng', 'retail', 'R', 2, 0, 300, 0],
+  ['Barber Gentleman KK', 'Gentleman Grooming Enterprise', 'barber', 'R', 3, 0, 150, 250],
+  ['Spa Refleksologi Harmoni', 'Harmoni Wellness Sdn. Bhd.', 'spa', 'R', 3, 1, 120, 0, true],
+  ['Kedai Kopi Fook Lee', 'Fook Lee Coffee Shop', 'food', 'R', 4, 0, 95, 0],
+  ['Kedai Telefon MyTech', 'MyTech Mobile Enterprise', 'retail', 'R', 5, 0, 5, 0],
+  ['Optik Jelas', 'Jelas Optical Enterprise', 'retail', 'R', 6, 0, 33, 0],
+  ['Bengkel Motosikal Jaya', 'Jaya Motor Workshop', 'workshop', 'L', 0, 0, 60, 0],
+  ['Farmasi Gaya Sihat', 'Gaya Sihat Pharmacy Sdn. Bhd.', 'retail', 'L', 1, 0, 400, 0],
+  ['Restoran Nasi Kandar Mutiara', 'Mutiara Food Enterprise', 'food', 'L', 2, 0, -10, 500],
+  ['Butik Nur Aina', 'Nur Aina Boutique', 'retail', 'L', 3, 0, 120, 0],
+  ['Gunting Rambut Pak Usu', 'Usu Hair Cut Enterprise', 'barber', 'L', 4, 0, 45, 0],
+  ['Pusat Urutan Kaki Tenang', 'Tenang Reflexology Enterprise', 'spa', 'L', 4, 1, 200, 0],
+  ['Kedai Roti Tuaran', 'Roti Tuaran Bakery', 'food', 'L', 5, 0, 250, 0],
+  ['Kedai Perkakasan Kinabalu', 'Kinabalu Hardware Trading', 'retail', 'L', 6, 0, 80, 0],
+  ['Dobi Bersih', 'Bersih Laundry Services', 'retail', 'R', -3, 0, 150, 0],
+  ['Bengkel Kereta Maju', 'Maju Auto Services', 'workshop', 'L', -4, 0, -90, 300],
+  ['Restoran Seafood Tanjung', 'Tanjung Seafood Sdn. Bhd.', 'food', 'R', 12, 0, 60, 0],
+  ['Barber Station Moden', 'Moden Barber Enterprise', 'barber', 'L', 16, 0, -5, 0],
+];
+const CONDITIONS = {
+  barber: ['Waktu operasi 9.00 pagi – 9.00 malam', 'Dinding hadapan tidak ditutup (contoh syarat)'],
+  food: ['Kaki lima tidak boleh digunakan untuk meja makan'],
+  retail: [],
+  spa: ['Tiada perkhidmatan selepas 10.00 malam', 'Pekerja berpakaian seragam'],
+  workshop: ['Kerja membaiki di dalam premis sahaja'],
+};
+const SIM_DS = { key: 'sim', center: { lat: 5.98045, lng: 116.07355 }, brg: 30 };
+const DAY = 864e5;
+const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+
+function buildPremises(ds) {
+  const t0 = today0();
+  return TEMPLATES.map(([trade, reg, type, side, slot, floor, days, compound, suspended], i) => {
+    const along = 9 + slot * 6.5;
+    const base = move(move(ds.center, ds.brg, along), ds.brg + (side === 'R' ? 90 : -90), 11);
+    const id = 'P' + String(i + 1).padStart(3, '0');
+    const unitNo = side === 'R' ? 2 * (slot + 10) : 2 * (slot + 10) - 1;
+    return {
+      id, trade, reg, type, floor, compound, suspended: !!suspended,
+      lat: base.lat, lng: base.lng,
+      licNo: 'DBKK/LP/' + (2024 + (i % 3)) + '/' + String(10457 + i * 37).padStart(5, '0'),
+      unit: (floor ? 'Tkt 1, ' : '') + 'Lot ' + unitNo + ', Blok ' + (side === 'R' ? 'A' : 'B'),
+      expiry: t0 + days * DAY,
+      lastInspection: i % 4 === 0 ? 'Belum pernah' : new Date(t0 - (40 + i * 23) * DAY).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' }),
+      conditions: CONDITIONS[type] || [],
+    };
+  });
+}
+function statusOf(p) {
+  const days = Math.round((p.expiry - today0()) / DAY);
+  if (p.suspended) return { key: 'bad', label: 'DIGANTUNG', days };
+  if (days < 0) return { key: 'bad', label: 'TAMAT', days };
+  if (days <= 30) return { key: 'warn', label: 'HAMPIR TAMAT', days };
+  return { key: 'ok', label: 'SAH', days };
+}
+const isProblem = (p) => statusOf(p).key !== 'ok' || p.compound > 0;
+const fmtDate = (t) => new Date(t).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtTime = (t) => new Date(t).toLocaleString('ms-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/* ---------- state ---------- */
+const S = {
+  mode: null, camera: false, pos: null, acc: null,
+  heading: 0, hx: 1, hy: 0, pitch: 0, hasCompass: false, manualHeading: false, compassAcc: null,
+  ds: null, premises: [],
+  radius: LS.get('radius', 40), fovH: LS.get('fov', 60),
+  types: new Set(Object.keys(TYPES)), onlyProblem: false,
+  inspections: LS.get('inspections', []), pins: LS.get('pins', {}),
+  sim: { truePos: null, jitter: false, noise: { n: 0, e: 0 } },
+  selectedId: null, draft: null, firstFixAt: null, startedAt: 0,
+};
+const posOf = (p) => (S.pins[S.ds?.key] || {})[p.id] || p;
+function setDataset(ds) { S.ds = ds; S.premises = buildPremises(ds); labels.forEach((el) => el.remove()); labels.clear(); }
+
+/* ---------- elements ---------- */
+const stage = $('#stage'), video = $('#cam'), sim = $('#sim'), layer = $('#labels'), radar = $('#radar');
+const sheet = $('#sheet'), sheetBody = $('#sheetBody'), scrim = $('#scrim');
+const labels = new Map();
+let toastTimer = 0;
+function toast(msg, ms = 3200) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms); }
+
+/* ---------- start ---------- */
+if (!window.isSecureContext) $('#secureWarn').hidden = false;
+$('#goField').addEventListener('click', startField);
+$('#goSim').addEventListener('click', startSim);
+
+async function startField() {
+  // iOS: orientation permission must be asked inside the tap, before anything else is awaited
+  let oriGranted = true;
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      oriGranted = (await DeviceOrientationEvent.requestPermission()) === 'granted';
+    }
+  } catch { oriGranted = false; }
+  $('#start').hidden = true;
+  S.mode = 'field'; S.startedAt = Date.now();
+  $('#hMode').textContent = 'LAPANGAN';
+  requestWakeLock();
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = stream; video.hidden = false; await video.play(); S.camera = true;
+  } catch { S.camera = false; toast('Kamera tidak dapat dibuka. Paparan tanpa kamera digunakan.'); }
+
+  if (oriGranted) {
+    const absEvt = 'ondeviceorientationabsolute' in window;
+    window.addEventListener(absEvt ? 'deviceorientationabsolute' : 'deviceorientation', onOrientation, true);
+  }
+  setTimeout(() => {
+    if (!S.hasCompass && S.mode === 'field') {
+      S.manualHeading = true; $('#turn').hidden = false; $('#turn .fw').hidden = true; $('#turn .bk').hidden = true;
+      toast('Kompas tidak tersedia. Seret skrin atau guna butang ◀ ▶ untuk pusing.', 5000);
+    }
+  }, 3000);
+
+  if ('geolocation' in navigator) {
+    navigator.geolocation.watchPosition(onPos, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  } else { onGeoErr({ code: 1 }); }
+  setTimeout(() => { if (!S.pos && S.mode === 'field') toast('Masih menunggu GPS. Pergi ke kawasan terbuka.', 4000); }, 12000);
+  requestAnimationFrame(frame);
+}
+
+function startSim() {
+  $('#start').hidden = true;
+  S.mode = 'sim'; S.camera = false; S.manualHeading = true; S.startedAt = Date.now();
+  $('#hMode').textContent = 'SIMULASI';
+  $('#turn').hidden = false;
+  setDataset(SIM_DS);
+  S.sim.truePos = move(SIM_DS.center, SIM_DS.brg, 30);   // mid-street, facing row A (Blok A)
+  setHeading(SIM_DS.brg + 90, true);
+  simTick(); setInterval(simTick, 1000);
+  requestAnimationFrame(frame);
+  toast('Seret skrin atau guna ◀ ▶ untuk pusing, ▲ ▼ untuk berjalan.', 4500);
+}
+function simTick() {
+  if (S.mode !== 'sim') return;
+  const n = S.sim.noise;
+  if (S.sim.jitter) { n.n = clamp(n.n + (Math.random() - 0.5) * 8, -12, 12); n.e = clamp(n.e + (Math.random() - 0.5) * 8, -12, 12); }
+  else { n.n = 0; n.e = 0; }
+  S.pos = move(move(S.sim.truePos, 0, n.n), 90, n.e);
+  S.acc = S.sim.jitter ? 14 : 4;
+}
+
+function onOrientation(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number' && !Number.isNaN(e.webkitCompassHeading)) {
+    h = e.webkitCompassHeading; S.compassAcc = e.webkitCompassAccuracy;
+  } else if (e.alpha != null && e.beta != null && e.gamma != null && (e.absolute || e.type === 'deviceorientationabsolute')) {
+    h = compassHeading(e.alpha, e.beta, e.gamma);
+  }
+  if (h == null || S.manualHeading) return;
+  if (!S.hasCompass) { S.hasCompass = true; setHeading(h, true); } else setHeading(h, false);
+  if (e.beta != null) S.pitch = S.pitch * 0.8 + clamp(e.beta - 90, -60, 60) * 0.2;
+}
+function setHeading(h, hard) {
+  const c = Math.cos(h * D2R), s = Math.sin(h * D2R);
+  if (hard) { S.hx = c; S.hy = s; } else { S.hx = S.hx * 0.82 + c * 0.18; S.hy = S.hy * 0.82 + s * 0.18; }
+  S.heading = n360(Math.atan2(S.hy, S.hx) * R2D);
+}
+
+function onPos(p) {
+  S.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+  S.acc = p.coords.accuracy;
+  if (!S.firstFixAt) S.firstFixAt = Date.now();
+  if (!S.ds) {
+    const saved = LS.get('fieldDs', null);
+    if (saved && dist(saved.center, S.pos) < 1500) { setDataset(saved); toast('Data contoh dimuatkan semula di lokasi ini.'); }
+    else if (S.acc <= 40 || Date.now() - S.firstFixAt > 8000) placeAroundMe();
+  }
+}
+function onGeoErr(err) {
+  if (err.code === 1) {
+    toast('Lokasi tidak dibenarkan. Beralih ke data simulasi.', 4500);
+    if (!S.ds) { setDataset(SIM_DS); S.pos = move(SIM_DS.center, SIM_DS.brg, -2); S.acc = null; }
+  }
+}
+function placeAroundMe() {
+  if (!S.pos) { toast('Belum ada kedudukan GPS.'); return; }
+  const brg = n360(Math.round(S.heading) - 90);           // street runs left to right of the officer
+  const ds = { key: 'f' + Date.now(), center: move(S.pos, brg, -30), brg };
+  LS.set('fieldDs', ds); setDataset(ds);
+  toast('Data contoh diletakkan: Blok A di hadapan anda, Blok B di belakang (seberang jalan).', 4500);
+}
+
+let wakeLock = null;
+async function requestWakeLock() { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { wakeLock = null; } }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.mode) requestWakeLock(); });
+
+/* ---------- manual turning / walking ---------- */
+function turn(d) { setHeading(S.heading + d, true); }
+function walk(m) { if (S.mode !== 'sim') return; S.sim.truePos = move(S.sim.truePos, S.heading, m); simTick(); }
+$('#turn').addEventListener('click', (e) => {
+  const a = e.target.closest('button')?.dataset.act;
+  if (a === 'tl') turn(-10); if (a === 'tr') turn(10); if (a === 'fw') walk(3); if (a === 'bk') walk(-3);
+});
+let drag = null;
+stage.addEventListener('pointerdown', (e) => {
+  if (!S.manualHeading || e.target.closest('button, #radar, nav')) return;
+  drag = { x: e.clientX, h: S.heading }; stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const f = (stage.clientWidth / 2) / Math.tan(S.fovH / 2 * D2R);
+  setHeading(drag.h - Math.atan((e.clientX - drag.x) / f) * R2D, true);
+});
+stage.addEventListener('pointerup', () => { drag = null; });
+stage.addEventListener('pointercancel', () => { drag = null; });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !sheet.hidden) { closeSheet(); return; }
+  if (!sheet.hidden || !S.manualHeading || e.target.closest('input, textarea, select')) return;
+  if (e.key === 'ArrowLeft') turn(-5); else if (e.key === 'ArrowRight') turn(5);
+  else if (e.key === 'ArrowUp') walk(2); else if (e.key === 'ArrowDown') walk(-2); else return;
+  e.preventDefault();
+});
+
+/* ---------- render loop ---------- */
+const EYE = 1.5, FLOOR_H = 3.6;
+function resizeCanvas(c, w, h) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return ctx;
+}
+function visibleSet() {
+  return S.premises.filter((p) => S.types.has(p.type) && (!S.onlyProblem || isProblem(p)));
+}
+function project(p, W, H, f) {
+  const pp = posOf(p);
+  const d = Math.max(1, dist(S.pos, pp));
+  const rel = n180(bearing(S.pos, pp) - S.heading);
+  const elev = Math.atan((p.floor * FLOOR_H + 3 - EYE) / d) * R2D;  // signboard height
+  return { p, d, rel, elev, x: W / 2 + f * Math.tan(rel * D2R), y: H / 2 - f * Math.tan((elev - S.pitch) * D2R) };
+}
+
+let lastHud = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  const W = stage.clientWidth, H = stage.clientHeight;
+  const f = (W / 2) / Math.tan(S.fovH / 2 * D2R);
+  const ready = S.pos && S.premises.length;
+  const items = ready ? visibleSet().map((p) => project(p, W, H, f)) : [];
+  const inR = items.filter((o) => o.d <= S.radius);
+
+  if (!S.camera) drawSim(W, H, f, items);
+  else if (sim.width) { sim.width = 0; }
+
+  // labels: nearest first claim their spot, farther ones move up when they would overlap
+  const placed = []; const shown = new Set(); let crowded = 0;
+  inR.filter((o) => Math.abs(o.rel) < S.fovH / 2 + 6).sort((a, b) => a.d - b.d).forEach((o) => {
+    if (placed.length >= 10) { crowded++; return; }
+    const el = labelFor(o.p);
+    const s = clamp(1.1 - o.d / 120, 0.66, 1.05);
+    const w = el._w * s, h = el._h * s;
+    let x = clamp(o.x - w / 2, 4, W - w - 4), y = clamp(o.y, 80 + h, H - 90) - h - 8;
+    for (let k = 0; k < 10; k++) {
+      const hit = placed.find((r) => x < r.x + r.w + 4 && x + w + 4 > r.x && y < r.y + r.h + 4 && y + h + 4 > r.y);
+      if (!hit) break;
+      y = hit.y - h - 6;
+    }
+    if (y < 64) { crowded++; return; }                     // would sit under the HUD: list it instead
+    placed.push({ x, y, w, h });
+    const dTxt = Math.round(o.d) + ' m';
+    if (el._d !== dTxt) { el._d = dTxt; el.querySelector('.ds').textContent = dTxt; }
+    el.style.transform = `translate(${(x - (el._w - w) / 2).toFixed(1)}px, ${(y - (el._h - h)).toFixed(1)}px) scale(${s.toFixed(3)})`;
+    el.style.zIndex = String(1000 - Math.round(o.d));
+    el.hidden = false; shown.add(o.p.id);
+  });
+  labels.forEach((el, id) => { if (!shown.has(id)) el.hidden = true; });
+  const cr = $('#crowd'); cr.hidden = !crowded;
+  if (crowded && cr._n !== crowded) { cr._n = crowded; cr.textContent = `+${crowded} premis lagi terlalu rapat · Senarai`; }
+
+  // off-screen hints
+  const left = inR.filter((o) => o.rel < -S.fovH / 2 - 6).sort((a, b) => a.d - b.d);
+  const right = inR.filter((o) => o.rel > S.fovH / 2 + 6).sort((a, b) => a.d - b.d);
+  edge($('#edgeL'), left, '◀ '); edge($('#edgeR'), right, '', ' ▶');
+  drawRadar(items);
+  if (ts - lastHud > 250) { lastHud = ts; updateHud(inR.length); }
+}
+function edge(el, arr, pre, post = '') {
+  el.hidden = !arr.length;
+  if (arr.length) el.innerHTML = `<b>${pre}${arr.length} premis${post}</b>${esc(arr[0].p.trade)} · ${Math.round(arr[0].d)} m`;
+}
+function labelFor(p) {
+  let el = labels.get(p.id);
+  if (el) return el;
+  const st = statusOf(p);
+  el = document.createElement('button');
+  el.type = 'button'; el.className = 'lbl'; el.dataset.st = st.key;
+  el.innerHTML = `<span class="nm">${esc(p.trade)}</span><span class="mt"><span class="st">${st.label}</span>` +
+    `<span>${TYPES[p.type].code}</span><span>Tkt ${p.floor ? '1' : 'G'} · <span class="ds"></span></span>` +
+    (p.compound ? `<span class="cp">Kompaun</span>` : '') + `</span>`;
+  el.setAttribute('aria-label', `${p.trade}, ${st.label}, ${TYPES[p.type].label}`);
+  el.addEventListener('click', () => openPremise(p.id));
+  el.hidden = false; layer.appendChild(el);
+  el._w = el.offsetWidth || 176; el._h = el.offsetHeight || 54;   // measure once while visible
+  el.hidden = true; labels.set(p.id, el);
+  return el;
+}
+function updateHud(nIn) {
+  const dot = $('#hGpsDot'), txt = $('#hGpsTxt');
+  if (!S.pos) { txt.textContent = 'Mencari GPS…'; dot.className = 'dot'; }
+  else if (S.acc == null) { txt.textContent = 'GPS simulasi'; dot.className = 'dot warn'; }
+  else { txt.textContent = 'GPS ±' + Math.round(S.acc) + ' m'; dot.className = 'dot ' + (S.acc <= 15 ? 'ok' : S.acc <= 30 ? 'warn' : 'bad'); }
+  $('#hHead').textContent = String(Math.round(S.heading)).padStart(3, '0') + '° ' + cardinal(S.heading);
+  $('#hRadius').textContent = `${nIn} dalam ${S.radius} m`;
+  const b = $('#banner');
+  let msg = '';
+  if (S.acc != null && S.acc > 25) msg = `Ketepatan GPS rendah (±${Math.round(S.acc)} m). Label mungkin tersasar beberapa kedai. Sahkan nama pada papan tanda.`;
+  else if (S.compassAcc != null && S.compassAcc > 25) msg = 'Kompas kurang tepat. Gerakkan telefon dalam bentuk angka 8 untuk kalibrasi.';
+  else if (S.pos && S.ds && !nIn) msg = `Tiada premis dalam ${S.radius} m. Besarkan radius atau buka Senarai berdekatan.`;
+  b.hidden = !msg; if (msg && b.textContent !== msg) b.textContent = msg;
+}
+
+/* simulated street when there is no camera: shopfront blocks, horizon and compass ticks */
+function drawSim(W, H, f, items) {
+  const ctx = resizeCanvas(sim, W, H);
+  const hy = H / 2 + f * Math.tan(S.pitch * D2R);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  const hz = clamp(hy / H, 0.001, 0.998);
+  g.addColorStop(0, '#16302d'); g.addColorStop(hz, '#2a4a46'); g.addColorStop(hz + 0.001, '#1a1f1e'); g.addColorStop(1, '#0c0f0f');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, hy); ctx.lineTo(W, hy); ctx.stroke();
+  const yAt = (hgt, d) => H / 2 - f * Math.tan((Math.atan((hgt - EYE) / d) * R2D - S.pitch) * D2R);
+  [...items].filter((o) => Math.abs(o.rel) < 80).sort((a, b) => b.d - a.d).forEach((o) => {
+    const half = Math.atan(3 / o.d) * R2D;
+    const xl = W / 2 + f * Math.tan(clamp(o.rel - half, -85, 85) * D2R), xr = W / 2 + f * Math.tan(clamp(o.rel + half, -85, 85) * D2R);
+    const top = yAt((o.p.floor + 1) * FLOOR_H, o.d), bot = yAt(o.p.floor * FLOOR_H, o.d);
+    const shade = clamp(1 - o.d / 140, 0.25, 0.9);
+    ctx.fillStyle = `rgba(${o.p.floor ? '96,118,114' : '128,150,145'},${shade})`;
+    ctx.fillRect(xl, top, xr - xl, bot - top);
+    ctx.strokeStyle = `rgba(10,20,19,${shade})`; ctx.strokeRect(xl, top, xr - xl, bot - top);
+    if (!o.p.floor) { // signboard strip
+      const sb = yAt(3.3, o.d), st = yAt(2.7, o.d);
+      ctx.fillStyle = `rgba(236,232,214,${shade})`; ctx.fillRect(xl + 1, sb, xr - xl - 2, st - sb);
+      if (xr - xl > 60) { ctx.fillStyle = '#1b2422'; ctx.font = `600 ${clamp((st - sb) * 0.6, 7, 13)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(o.p.trade.toUpperCase(), (xl + xr) / 2, (sb + st) / 2, xr - xl - 6); }
+    }
+  });
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = '600 11px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let a = 0; a < 360; a += 15) {
+    const rel = n180(a - S.heading); if (Math.abs(rel) > S.fovH / 2 + 5) continue;
+    const x = W / 2 + f * Math.tan(rel * D2R);
+    ctx.fillRect(x - 0.5, hy - (a % 45 ? 4 : 8), 1, a % 45 ? 4 : 8);
+    if (a % 45 === 0) ctx.fillText(CARD[a / 45], x, hy + 4);
+  }
+}
+function drawRadar(items) {
+  const sz = radar.clientWidth; if (!sz) return;
+  const ctx = resizeCanvas(radar, sz, sz), c = sz / 2, r = c - 6;
+  ctx.clearRect(0, 0, sz, sz);
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.moveTo(c, c);
+  ctx.arc(c, c, r, (-90 - S.fovH / 2) * D2R, (-90 + S.fovH / 2) * D2R); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.beginPath(); ctx.arc(c, c, r / 2, 0, Math.PI * 2); ctx.stroke();
+  const css = getComputedStyle(document.documentElement);
+  const col = { ok: css.getPropertyValue('--ar-ok'), warn: css.getPropertyValue('--ar-warn'), bad: css.getPropertyValue('--ar-bad') };
+  items.forEach((o) => {
+    if (o.d > S.radius) return;
+    const k = o.d / S.radius * r;
+    ctx.fillStyle = col[statusOf(o.p).key]; ctx.beginPath();
+    ctx.arc(c + Math.sin(o.rel * D2R) * k, c - Math.cos(o.rel * D2R) * k, 3.2, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(c, c, 3.5, 0, Math.PI * 2); ctx.fill();
+  const nrel = n180(0 - S.heading) * D2R; // north marker
+  ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('U', c + Math.sin(nrel) * (r - 1), c - Math.cos(nrel) * (r - 1));
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '600 9px system-ui'; ctx.fillText(S.radius + ' m', c, sz - 9);
+}
+
+/* ---------- sheets ---------- */
+function openSheet(html, label) {
+  $('#toast').hidden = true;
+  sheetBody.innerHTML = html; sheet.setAttribute('aria-label', label); sheet.hidden = false; scrim.hidden = false; sheet.scrollTop = 0;
+  sheetBody.querySelector('[data-close]')?.focus({ preventScroll: true });
+}
+function closeSheet() { sheet.hidden = true; scrim.hidden = true; S.selectedId = null; S.draft = null; }
+scrim.addEventListener('click', closeSheet);
+sheetBody.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeSheet(); });
+$('#bList').addEventListener('click', openList);
+$('#crowd').addEventListener('click', openList);
+radar.addEventListener('click', openList);
+radar.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openList(); } });
+$('#bFilter').addEventListener('click', openFilters);
+$('#hRadius').addEventListener('click', openFilters);
+$('#bUnlisted').addEventListener('click', openUnlisted);
+$('#bLog').addEventListener('click', openLog);
+const head = (title) => `<div class="shead"><h2>${title}</h2><button class="x" type="button" data-close>Tutup</button></div>`;
+
+function openList() {
+  if (!S.pos || !S.premises.length) { toast('Belum ada kedudukan GPS.'); return; }
+  const rows = visibleSet().map((p) => { const pp = posOf(p); return { p, d: dist(S.pos, pp), rel: n180(bearing(S.pos, pp) - S.heading) }; }).sort((a, b) => a.d - b.d);
+  let divided = false;
+  const li = rows.map((o) => {
+    const st = statusOf(o.p), out = o.d > S.radius;
+    let pre = '';
+    if (out && !divided) { divided = true; pre = `<li class="divider">Di luar radius ${S.radius} m</li>`; }
+    return pre + `<li><button type="button" data-id="${o.p.id}" class="${out ? 'out' : ''}"><span class="ldot ${st.key}"></span>` +
+      `<span class="t">${esc(o.p.trade)}<span class="s">${TYPES[o.p.type].code} · ${esc(o.p.unit)} · ${st.label}${o.p.compound ? ' · kompaun' : ''}</span></span>` +
+      `<span class="d">${Math.round(o.d)} m<span class="s">${relWord(o.rel)}</span></span></button></li>`;
+  }).join('');
+  openSheet(`<div class="sh">${head('Premis berdekatan')}<p class="note">Disusun ikut jarak dari kedudukan GPS anda. Guna senarai ini jika label kamera tidak stabil.</p>` +
+    (li ? `<ul class="list">${li}</ul>` : `<div class="empty">Tiada premis sepadan dengan tapisan.</div>`) + `</div>`, 'Premis berdekatan');
+  sheetBody.querySelectorAll('.list button[data-id]').forEach((b) => b.addEventListener('click', () => openPremise(b.dataset.id)));
+}
+
+function openPremise(id) {
+  const p = S.premises.find((x) => x.id === id); if (!p) return;
+  const st = statusOf(p), pp = posOf(p);
+  const d = S.pos ? Math.round(dist(S.pos, pp)) : null, rel = S.pos ? n180(bearing(S.pos, pp) - S.heading) : 0;
+  S.selectedId = id; S.draft = { results: {}, notes: '', photos: [] };
+  const daysTxt = p.suspended ? 'lesen digantung' : st.days < 0 ? `tamat ${-st.days} hari lalu` : `${st.days} hari lagi`;
+  const rules = rulesFor(p.type);
+  const prev = S.inspections.filter((x) => x.premiseId === id && x.dsKey === S.ds.key);
+  openSheet(`<div class="sh">
+    <div class="shead"><div class="row"><span class="tag">${TYPES[p.type].code}</span><span class="pill ${st.key}">${st.label}</span></div>
+      <button class="x" type="button" data-close>Tutup</button></div>
+    <header class="ph"><h2>${esc(p.trade)}</h2><p class="sub">${esc(p.reg)}</p>
+      <p class="sub">${esc(p.unit)}${d != null ? ` · ${d} m ${relWord(rel)}` : ''}</p></header>
+    <dl class="facts">
+      <div><dt>No. lesen</dt><dd class="mono">${esc(p.licNo)}</dd></div>
+      <div><dt>Jenis lesen</dt><dd>${TYPES[p.type].label}</dd></div>
+      <div><dt>Tarikh tamat</dt><dd class="${st.key === 'ok' ? '' : st.key}">${fmtDate(p.expiry)} <small>(${daysTxt})</small></dd></div>
+      <div><dt>Kompaun tertunggak</dt><dd class="${p.compound ? 'bad' : ''}">${p.compound ? 'RM ' + p.compound.toLocaleString('ms-MY') : 'Tiada'}</dd></div>
+      <div><dt>Semakan terakhir</dt><dd>${prev.length ? fmtTime(prev[prev.length - 1].at) : esc(p.lastInspection)}</dd></div>
+      <div><dt>Tingkat</dt><dd>${p.floor ? 'Tingkat 1' : 'Tingkat bawah'}</dd></div>
+    </dl>
+    ${p.conditions.length ? `<section><h3>Syarat lesen</h3><ul class="plain">${p.conditions.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></section>` : ''}
+    <section><h3>Senarai semak pematuhan</h3>
+      <p class="note">Senarai contoh untuk ${TYPES[p.type].label.toLowerCase()}. Peraturan sebenar perlu disahkan oleh bahagian pelesenan DBKK.
+        VISUAL boleh disemak dari luar premis; MANUAL perlu pemeriksaan atau dokumen.</p>
+      <ol class="chk">${rules.map((r) => `<li data-rule="${r.id}"><div class="rt">${esc(r.text)}<span class="kind ${r.kind}">${r.kind === 'visual' ? 'VISUAL' : 'MANUAL'}</span>${r.example ? '<span class="kind ex">CONTOH</span>' : ''}</div>
+        <div class="seg" role="group" aria-label="${esc(r.text)}">
+          <button type="button" data-v="ok" aria-pressed="false">Patuh</button><button type="button" data-v="no" aria-pressed="false">Tidak patuh</button><button type="button" data-v="na" aria-pressed="false" title="Tidak berkenaan">T/B</button>
+        </div></li>`).join('')}</ol>
+    </section>
+    <section><h3>Bukti</h3>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" type="button" id="snap">Ambil gambar</button>
+        <span class="fine">Gambar dicop masa, GPS dan arah.</span></div>
+      <label class="f" style="margin-top:12px">Catatan pegawai<textarea id="notes" placeholder="Contoh: cermin hadapan ditutup pelekat hitam sepenuhnya"></textarea></label>
+    </section>
+    <div class="actions"><button class="btn primary" type="button" id="save">Simpan semakan</button><span class="outcome" id="outcome"></span></div>
+    <p class="fine">Notis dan kompaun dikeluarkan dalam sistem pelesenan, bukan dalam prototaip ini.</p>
+    <details class="pin"><summary>Label pada kedai yang salah?</summary>
+      <p>Jika anda berdiri betul-betul di hadapan premis ini, alih pin ke kedudukan GPS anda sekarang. Dalam sistem sebenar ini memperbaiki koordinat untuk semua pegawai.</p>
+      <button class="btn sm" type="button" id="repin">Alih pin ke kedudukan saya</button></details>
+  </div>`, p.trade);
+
+  const chk = sheetBody.querySelector('.chk');
+  chk.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]'); if (!b) return;
+    const li = b.closest('li'), rid = li.dataset.rule;
+    const now = S.draft.results[rid] === b.dataset.v ? undefined : b.dataset.v;
+    if (now) S.draft.results[rid] = now; else delete S.draft.results[rid];
+    li.querySelectorAll('button[data-v]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === now)));
+    li.classList.toggle('no', now === 'no');
+    updateOutcome(rules);
+  });
+  $('#notes').addEventListener('input', (e) => { S.draft.notes = e.target.value; });
+  $('#snap').addEventListener('click', () => { const img = capturePhoto(p); S.draft.photos.push(img); addThumb(img); });
+  $('#save').addEventListener('click', () => saveInspection(p, rules));
+  $('#repin').addEventListener('click', (e) => {
+    if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Ketik sekali lagi untuk sahkan'; return; }
+    const k = S.ds.key; S.pins[k] = S.pins[k] || {}; S.pins[k][p.id] = { ...S.pos }; LS.set('pins', S.pins);
+    e.target.textContent = 'Pin dikemas kini'; e.target.disabled = true; toast('Pin premis dialih ke kedudukan anda.');
+  });
+  updateOutcome(rules);
+}
+function updateOutcome(rules) {
+  const r = S.draft.results, n = Object.keys(r).length, bad = Object.values(r).filter((v) => v === 'no').length;
+  const el = $('#outcome');
+  if (bad) { el.textContent = `${bad} tidak patuh`; el.style.color = 'var(--bad)'; }
+  else if (n === rules.length) { el.textContent = 'Semua patuh'; el.style.color = 'var(--ok)'; }
+  else { el.textContent = `${n}/${rules.length} disemak`; el.style.color = 'var(--muted)'; }
+}
+function addThumb(src) { const i = new Image(); i.src = src; i.alt = 'Gambar bukti'; $('#thumbs').appendChild(i); }
+
+function capturePhoto(p) {
+  const W = 960, src = S.camera && video.videoWidth ? video : sim;
+  const sw = S.camera ? video.videoWidth : sim.width, sh = S.camera ? video.videoHeight : sim.height;
+  const H = Math.round(W * Math.min(sh / sw || 0.75, 1.4));
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  try { ctx.drawImage(src, 0, 0, W, H); } catch { ctx.fillStyle = '#333'; ctx.fillRect(0, 0, W, H); }
+  const lines = [
+    p ? `${p.trade} · ${p.licNo}` : 'Premis tiada dalam senarai',
+    `${new Date().toLocaleString('ms-MY')} · Pegawai: DEMO`,
+    S.pos ? `${S.pos.lat.toFixed(6)}, ${S.pos.lng.toFixed(6)} ±${S.acc != null ? Math.round(S.acc) : '?'} m · arah ${Math.round(S.heading)}° ${cardinal(S.heading)}` : 'Tiada GPS',
+  ];
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, H - 92, W, 92);
+  ctx.fillStyle = '#fff'; ctx.font = '600 22px system-ui'; ctx.textBaseline = 'top';
+  lines.forEach((t, i) => ctx.fillText(t, 16, H - 84 + i * 27, W - 32));
+  return c.toDataURL('image/jpeg', 0.62);
+}
+function persistInspections(rec) {
+  S.inspections.push(rec);
+  if (LS.set('inspections', S.inspections)) return true;
+  rec.photos = []; rec.photosDropped = true;           // storage full: keep the record, drop photos
+  return LS.set('inspections', S.inspections) ? 'nophoto' : false;
+}
+function saveInspection(p, rules) {
+  const r = S.draft.results;
+  if (!Object.keys(r).length) { toast('Tandakan sekurang-kurangnya satu perkara dalam senarai semak.'); return; }
+  const bad = rules.filter((x) => r[x.id] === 'no');
+  const rec = {
+    id: 'I' + Date.now(), kind: 'premise', dsKey: S.ds.key, premiseId: p.id, trade: p.trade, licNo: p.licNo, type: p.type,
+    licenceStatus: statusOf(p).label, at: Date.now(), pos: S.pos, acc: S.acc, heading: Math.round(S.heading),
+    results: r, failed: bad.map((x) => x.text), outcome: bad.length ? 'Tidak patuh' : Object.keys(r).length === rules.length ? 'Patuh' : 'Belum lengkap',
+    notes: S.draft.notes.trim(), photos: S.draft.photos,
+  };
+  const ok = persistInspections(rec);
+  closeSheet();
+  toast(ok === true ? `Semakan disimpan: ${rec.outcome}.` : ok === 'nophoto' ? 'Storan penuh. Semakan disimpan tanpa gambar.' : 'Gagal menyimpan. Storan pelayar tidak tersedia.');
+  $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
+}
+
+function openUnlisted() {
+  S.draft = { photos: [] };
+  openSheet(`<div class="sh">${head('Premis tiada dalam senarai')}
+    <p class="note">Gunakan apabila papan tanda di hadapan anda tidak sepadan dengan mana-mana label. Ini mungkin premis tanpa lesen
+      atau premis yang belum dipetakan.</p>
+    <label class="f">Nama pada papan tanda<input id="uName" type="text" autocomplete="off" placeholder="Contoh: Kedai Gunting Rambut Mesra"></label>
+    <label class="f">Jenis perniagaan yang dilihat<select id="uType">${Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('')}<option value="other">Lain-lain</option></select></label>
+    <label class="f">Tingkat<select id="uFloor"><option value="0">Tingkat bawah</option><option value="1">Tingkat 1</option><option value="2">Tingkat 2 ke atas</option></select></label>
+    <section><h3>Bukti</h3><div class="thumbs" id="thumbs"></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" type="button" id="snap">Ambil gambar</button><span class="fine">Gambar papan tanda dan bahagian hadapan.</span></div></section>
+    <label class="f">Catatan<textarea id="notes"></textarea></label>
+    <div class="actions"><button class="btn primary" type="button" id="save">Simpan laporan</button><span></span></div>
+  </div>`, 'Premis tiada dalam senarai');
+  $('#snap').addEventListener('click', () => { const img = capturePhoto(null); S.draft.photos.push(img); addThumb(img); });
+  $('#save').addEventListener('click', () => {
+    const name = $('#uName').value.trim();
+    if (!name) { toast('Masukkan nama pada papan tanda.'); $('#uName').focus(); return; }
+    const rec = { id: 'U' + Date.now(), kind: 'unlisted', dsKey: S.ds?.key, trade: name, type: $('#uType').value, floor: +$('#uFloor').value,
+      at: Date.now(), pos: S.pos, acc: S.acc, heading: Math.round(S.heading), outcome: 'Untuk siasatan', notes: $('#notes').value.trim(), photos: S.draft.photos };
+    const ok = persistInspections(rec); closeSheet();
+    toast(ok ? 'Laporan premis tiada dalam senarai disimpan.' : 'Gagal menyimpan.');
+    $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
+  });
+}
+
+function openFilters() {
+  const typeChips = Object.entries(TYPES).map(([k, t]) => `<button class="tg" type="button" data-type="${k}" aria-pressed="${S.types.has(k)}">${t.code}</button>`).join('');
+  openSheet(`<div class="sh">${head('Tapis dan tetapan')}
+    <section><h3>Radius carian</h3><div class="range"><input id="fRadius" type="range" min="20" max="150" step="5" value="${S.radius}" aria-label="Radius carian"><output id="oRadius">${S.radius} m</output></div>
+      <p class="note">Label hanya dipaparkan untuk premis dalam radius ini.</p></section>
+    <section><h3>Jenis lesen</h3><div class="chips" id="fTypes">${typeChips}</div></section>
+    <label class="sw"><input id="fProblem" type="checkbox" ${S.onlyProblem ? 'checked' : ''}><span>Hanya premis bermasalah<small>Lesen tamat, digantung, hampir tamat atau ada kompaun tertunggak.</small></span></label>
+    <section><h3>Sudut pandangan kamera</h3><div class="range"><input id="fFov" type="range" min="35" max="85" step="1" value="${S.fovH}" aria-label="Sudut pandangan kamera"><output id="oFov">${S.fovH}°</output></div>
+      <p class="note">Kalibrasi: halakan ke satu kedai yang anda kenal di tepi skrin. Laraskan sehingga label jatuh di atas kedai itu.</p></section>
+    ${S.mode === 'sim' ? `<label class="sw"><input id="fJitter" type="checkbox" ${S.sim.jitter ? 'checked' : ''}><span>Simulasi ralat GPS (±12 m)<small>Tunjukkan bagaimana label tersasar apabila isyarat GPS lemah di antara bangunan.</small></span></label>` : ''}
+    ${S.mode === 'field' ? `<section><h3>Data contoh</h3><p class="note">Halakan telefon ke deretan kedai sebenar dahulu. Blok A akan diletakkan di hadapan anda dan Blok B di belakang.</p>
+      <button class="btn sm" type="button" id="fPlace">Letak semula di sekeliling saya</button></section>` : ''}
+  </div>`, 'Tapis dan tetapan');
+  $('#fRadius').addEventListener('input', (e) => { S.radius = +e.target.value; $('#oRadius').textContent = S.radius + ' m'; LS.set('radius', S.radius); });
+  $('#fFov').addEventListener('input', (e) => { S.fovH = +e.target.value; $('#oFov').textContent = S.fovH + '°'; LS.set('fov', S.fovH); });
+  $('#fProblem').addEventListener('change', (e) => { S.onlyProblem = e.target.checked; });
+  $('#fTypes').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-type]'); if (!b) return;
+    const k = b.dataset.type; if (S.types.has(k)) S.types.delete(k); else S.types.add(k);
+    b.setAttribute('aria-pressed', String(S.types.has(k)));
+  });
+  $('#fJitter')?.addEventListener('change', (e) => { S.sim.jitter = e.target.checked; simTick(); });
+  $('#fPlace')?.addEventListener('click', () => { placeAroundMe(); closeSheet(); });
+}
+
+function openLog() {
+  const recs = [...S.inspections].reverse();
+  const li = recs.map((r) => `<li><div class="row" style="justify-content:space-between"><strong>${esc(r.trade)}</strong>` +
+    `<span class="pill ${r.outcome === 'Patuh' ? 'ok' : r.outcome === 'Tidak patuh' ? 'bad' : 'warn'}">${esc(r.outcome)}</span></div>` +
+    `<span class="fine">${fmtTime(r.at)} · ${r.kind === 'unlisted' ? 'Tiada dalam senarai' : esc(r.licNo)} · ${r.photos.length} gambar${r.photosDropped ? ' (dibuang, storan penuh)' : ''}</span>` +
+    (r.failed?.length ? `<span class="fine" style="color:var(--bad)">${r.failed.map(esc).join('; ')}</span>` : '') +
+    (r.notes ? `<span class="fine">“${esc(r.notes)}”</span>` : '') + `</li>`).join('');
+  openSheet(`<div class="sh">${head('Log semakan')}
+    <p class="note">Disimpan dalam pelayar telefon ini sahaja. Dalam sistem sebenar, rekod dihantar ke pelayan dengan jejak audit.</p>
+    ${li ? `<ul class="list log">${li}</ul>` : `<div class="empty">Belum ada semakan. Ketik label premis untuk mula.</div>`}
+    ${li ? `<div class="row"><button class="btn sm" type="button" id="exp">Eksport JSON</button><button class="btn sm danger" type="button" id="clr">Padam semua</button></div>` : ''}
+  </div>`, 'Log semakan');
+  $('#exp')?.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(S.inspections, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'semakan-premis-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  $('#clr')?.addEventListener('click', (e) => {
+    if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Ketik lagi untuk padam semua'; return; }
+    S.inspections = []; LS.set('inspections', []); $('#bLog').textContent = 'Log semakan'; openLog();
+  });
+}
+if (S.inspections.length) $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
+
+/* ---------- PWA ---------- */
+if ('serviceWorker' in navigator && window.isSecureContext && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
