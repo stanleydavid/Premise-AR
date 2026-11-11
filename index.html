@@ -39,7 +39,7 @@
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); overflow: hidden;
   -webkit-tap-highlight-color: transparent; }
-button { font: inherit; color: inherit; cursor: pointer; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
   outline: 3px solid var(--accent); outline-offset: 2px; }
 h2, h3 { text-wrap: balance; margin: 0; }
@@ -134,7 +134,7 @@ h2, h3 { text-wrap: balance; margin: 0; }
 
 /* ---------- sheet ---------- */
 #scrim { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.35); }
-#sheet { position: fixed; z-index: 11; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 640px; max-height: 86%;
+#sheet { scroll-padding-bottom: 96px; position: fixed; z-index: 11; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 640px; max-height: 86%;
   overflow: auto; overscroll-behavior: contain; background: var(--bg); color: var(--fg);
   border-radius: 18px 18px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.3);
   padding: 8px max(16px, var(--sr)) calc(var(--sb) + 18px) max(16px, var(--sl)); }
@@ -194,7 +194,8 @@ details.pin p { color: var(--muted); font-size: 13.5px; }
   border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .list button { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
   text-align: left; padding: 11px 12px; background: var(--surface); border: 0; }
-.list .t { font-weight: 650; min-width: 0; }
+.list .t { font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
+.ferr { margin: -6px 0 0; color: var(--bad); font-size: 13.5px; font-weight: 600; }
 .list .s { display: block; font-size: 12.5px; color: var(--muted); font-weight: 500; }
 .list .d { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
 .list .out { opacity: .55; }
@@ -477,8 +478,9 @@ function toast(msg, ms = 3200) { const t = $('#toast'); t.textContent = msg; t.h
 
 /* ---------- start ---------- */
 if (!window.isSecureContext) $('#secureWarn').hidden = false;
-$('#goField').addEventListener('click', startField);
-$('#goSim').addEventListener('click', startSim);
+const lockStart = () => { $('#goField').disabled = true; $('#goSim').disabled = true; };
+$('#goField').addEventListener('click', () => { lockStart(); $('#goField').textContent = 'Meminta kebenaran…'; startField(); });
+$('#goSim').addEventListener('click', () => { lockStart(); startSim(); });
 
 async function startField() {
   // iOS: orientation permission must be asked inside the tap, before anything else is awaited
@@ -764,14 +766,34 @@ function drawRadar(items) {
 }
 
 /* ---------- sheets ---------- */
+let sheetOpener = null, closeArmed = false;
 function openSheet(html, label) {
   $('#toast').hidden = true;
+  if (sheet.hidden) sheetOpener = document.activeElement;
+  S.dirty = false; closeArmed = false;
   sheetBody.innerHTML = html; sheet.setAttribute('aria-label', label); sheet.hidden = false; scrim.hidden = false; sheet.scrollTop = 0;
   sheetBody.querySelector('[data-close]')?.focus({ preventScroll: true });
 }
-function closeSheet() { sheet.hidden = true; scrim.hidden = true; S.selectedId = null; S.draft = null; }
-scrim.addEventListener('click', closeSheet);
+function closeSheet(force) {
+  if (sheet.hidden) return;
+  if (S.dirty && !force && !closeArmed) {             // unsaved checklist / report: ask once
+    closeArmed = true; toast('Semakan belum disimpan. Tutup sekali lagi untuk buang.', 4000); return;
+  }
+  sheet.hidden = true; scrim.hidden = true; S.selectedId = null; S.draft = null; S.dirty = false;
+  if (sheetOpener && sheetOpener.isConnected && !sheetOpener.hidden) sheetOpener.focus({ preventScroll: true });
+  sheetOpener = null;
+}
+scrim.addEventListener('click', () => closeSheet());
 sheetBody.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeSheet(); });
+sheetBody.addEventListener('input', () => { S.dirty = true; closeArmed = false; });
+sheet.addEventListener('keydown', (e) => {                // keep Tab inside the open sheet
+  if (e.key !== 'Tab') return;
+  const f = [...sheet.querySelectorAll('button:not([disabled]), input, select, textarea, summary, [tabindex="0"]')].filter((x) => x.offsetParent);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 $('#bList').addEventListener('click', openList);
 $('#crowd').addEventListener('click', openList);
 radar.addEventListener('click', openList);
@@ -849,11 +871,11 @@ function openPremise(id) {
     const now = S.draft.results[rid] === b.dataset.v ? undefined : b.dataset.v;
     if (now) S.draft.results[rid] = now; else delete S.draft.results[rid];
     li.querySelectorAll('button[data-v]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === now)));
-    li.classList.toggle('no', now === 'no');
+    li.classList.toggle('no', now === 'no'); S.dirty = true; closeArmed = false;
     updateOutcome(rules);
   });
   $('#notes').addEventListener('input', (e) => { S.draft.notes = e.target.value; });
-  $('#snap').addEventListener('click', () => { const img = capturePhoto(p); S.draft.photos.push(img); addThumb(img); });
+  $('#snap').addEventListener('click', () => { const img = capturePhoto(p); S.draft.photos.push(img); addThumb(img); S.dirty = true; toast('Gambar ditambah.', 1500); });
   $('#save').addEventListener('click', () => saveInspection(p, rules));
   $('#repin').addEventListener('click', (e) => {
     if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Ketik sekali lagi untuk sahkan'; return; }
@@ -869,7 +891,10 @@ function updateOutcome(rules) {
   else if (n === rules.length) { el.textContent = 'Semua patuh'; el.style.color = 'var(--ok)'; }
   else { el.textContent = `${n}/${rules.length} disemak`; el.style.color = 'var(--muted)'; }
 }
-function addThumb(src) { const i = new Image(); i.src = src; i.alt = 'Gambar bukti'; $('#thumbs').appendChild(i); }
+function addThumb(src) {
+  const i = new Image(); i.src = src; i.width = 160; i.height = 120;
+  i.alt = `Gambar bukti ${$('#thumbs').children.length + 1}`; $('#thumbs').appendChild(i);
+}
 
 function capturePhoto(p) {
   const W = 960, src = S.camera && video.videoWidth ? video : sim;
@@ -905,7 +930,7 @@ function saveInspection(p, rules) {
     notes: S.draft.notes.trim(), photos: S.draft.photos,
   };
   const ok = persistInspections(rec);
-  closeSheet();
+  closeSheet(true);
   toast(ok === true ? `Semakan disimpan: ${rec.outcome}.` : ok === 'nophoto' ? 'Storan penuh. Semakan disimpan tanpa gambar.' : 'Gagal menyimpan. Storan pelayar tidak tersedia.');
   $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
 }
@@ -915,21 +940,25 @@ function openUnlisted() {
   openSheet(`<div class="sh">${head('Premis tiada dalam senarai')}
     <p class="note">Gunakan apabila papan tanda di hadapan anda tidak sepadan dengan mana-mana label. Ini mungkin premis tanpa lesen
       atau premis yang belum dipetakan.</p>
-    <label class="f">Nama pada papan tanda<input id="uName" type="text" autocomplete="off" placeholder="Contoh: Kedai Gunting Rambut Mesra"></label>
+    <form id="uForm" class="sh" novalidate>
+    <label class="f">Nama pada papan tanda<input id="uName" name="signboard" type="text" autocomplete="off" required aria-describedby="uErr" placeholder="Contoh: Kedai Gunting Rambut Mesra"></label>
+    <p class="ferr" id="uErr" role="alert" hidden></p>
     <label class="f">Jenis perniagaan yang dilihat<select id="uType">${Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${t.label}</option>`).join('')}<option value="other">Lain-lain</option></select></label>
     <label class="f">Tingkat<select id="uFloor"><option value="0">Tingkat bawah</option><option value="1">Tingkat 1</option><option value="2">Tingkat 2 ke atas</option></select></label>
     <section><h3>Bukti</h3><div class="thumbs" id="thumbs"></div>
       <div class="row" style="margin-top:8px"><button class="btn sm" type="button" id="snap">Ambil gambar</button><span class="fine">Gambar papan tanda dan bahagian hadapan.</span></div></section>
     <label class="f">Catatan<textarea id="notes"></textarea></label>
-    <div class="actions"><button class="btn primary" type="button" id="save">Simpan laporan</button><span></span></div>
+    <div class="actions"><button class="btn primary" type="submit" id="save">Simpan laporan</button><span></span></div>
+    </form>
   </div>`, 'Premis tiada dalam senarai');
-  $('#snap').addEventListener('click', () => { const img = capturePhoto(null); S.draft.photos.push(img); addThumb(img); });
-  $('#save').addEventListener('click', () => {
-    const name = $('#uName').value.trim();
-    if (!name) { toast('Masukkan nama pada papan tanda.'); $('#uName').focus(); return; }
+  $('#snap').addEventListener('click', () => { const img = capturePhoto(null); S.draft.photos.push(img); addThumb(img); S.dirty = true; toast('Gambar ditambah.', 1500); });
+  $('#uForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('#uName').value.trim(), err = $('#uErr');
+    if (!name) { err.textContent = 'Masukkan nama seperti tertulis pada papan tanda.'; err.hidden = false; $('#uName').setAttribute('aria-invalid', 'true'); $('#uName').focus(); return; }
     const rec = { id: 'U' + Date.now(), kind: 'unlisted', dsKey: S.ds?.key, trade: name, type: $('#uType').value, floor: +$('#uFloor').value,
       at: Date.now(), pos: S.pos, acc: S.acc, heading: Math.round(S.heading), outcome: 'Untuk siasatan', notes: $('#notes').value.trim(), photos: S.draft.photos };
-    const ok = persistInspections(rec); closeSheet();
+    const ok = persistInspections(rec); closeSheet(true);
     toast(ok ? 'Laporan premis tiada dalam senarai disimpan.' : 'Gagal menyimpan.');
     $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
   });
@@ -988,6 +1017,7 @@ function openLog() {
     const blob = new Blob([JSON.stringify(S.inspections, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'semakan-premis-' + new Date().toISOString().slice(0, 10) + '.json';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast(`${S.inspections.length} rekod dieksport ke fail JSON.`);
   });
   $('#clr')?.addEventListener('click', (e) => {
     if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Ketik lagi untuk padam semua'; return; }
