@@ -15,7 +15,7 @@
 :root {
   --bg: #f4f7f6; --surface: #ffffff; --fg: #14201e; --muted: #5a6a67; --line: #d6dfdc;
   --accent: #0d6e66; --accent-fg: #ffffff;
-  --ok: #15803d; --warn: #b45309; --bad: #c62828;
+  --ok: #136b33; --warn: #974605; --bad: #c62828;
   --ok-bg: #e2f3e7; --warn-bg: #fcefdb; --bad-bg: #fae3e3;
   /* AR overlay always sits on a camera image, so it keeps one dark look in both themes */
   --ar-glass: rgba(10, 20, 19, 0.82); --ar-line: rgba(255, 255, 255, 0.2); --ar-fg: #ffffff; --ar-muted: #b9c9c6;
@@ -36,6 +36,7 @@
   --ok: #4ade80; --warn: #fbbf24; --bad: #ff7b7b;
   --ok-bg: #11301e; --warn-bg: #33270b; --bad-bg: #3b1616; color-scheme: dark; }
 
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); overflow: hidden;
   -webkit-tap-highlight-color: transparent; }
@@ -84,7 +85,8 @@ h2, h3 { text-wrap: balance; margin: 0; }
 .chip.demo { background: #fbbf24; color: #1d1405; border-color: #fbbf24; font-weight: 700; letter-spacing: .04em; }
 #banner { position: absolute; top: calc(var(--st) + 52px); left: max(12px, var(--sl)); right: max(12px, var(--sr));
   margin: 0 auto; max-width: 520px; padding: 8px 12px; border-radius: 10px; font-size: 13px;
-  background: rgba(120, 72, 6, 0.9); color: #fff6e3; pointer-events: none; }
+  background: rgba(120, 72, 6, 0.92); color: #fff6e3; pointer-events: none; }
+#banner button { pointer-events: auto; }
 
 .edge { position: absolute; top: 58%; padding: 8px 10px; max-width: 42vw; font-size: 12px; line-height: 1.25;
   background: var(--ar-glass); color: var(--ar-fg); border: 1px solid var(--ar-line); pointer-events: none; }
@@ -93,6 +95,34 @@ h2, h3 { text-wrap: balance; margin: 0; }
 .edge b { display: block; font-size: 13px; }
 
 #crowd { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--sb) + 196px); cursor: pointer; }
+#state { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(340px, calc(100% - 32px));
+  padding: 18px; border-radius: 16px; background: var(--ar-glass); color: var(--ar-fg); border: 1px solid var(--ar-line);
+  display: grid; gap: 10px; text-align: left; }
+#state h2 { font-size: 18px; }
+#state p { margin: 0; color: var(--ar-muted); font-size: 14px; }
+#state .btns { margin-top: 4px; }
+#state .btn { min-height: 46px; background: transparent; color: var(--ar-fg); border-color: var(--ar-line); }
+#state .btn.primary { background: #fbbf24; color: #1d1405; border-color: #fbbf24; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--ar-line); border-top-color: var(--ar-fg); display: inline-block;
+  vertical-align: -3px; margin-right: 8px; }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: spin 0.9s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } } }
+#banner button { margin-top: 6px; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.5);
+  background: rgba(0,0,0,.25); color: inherit; font-weight: 650; font-size: 13px; }
+.chip.warnchip .dot { background: var(--ar-warn); }
+.chip[aria-pressed="true"] { background: #e6eeec; color: #0e1615; border-color: #e6eeec; }
+.verdict { border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; font-size: 14.5px; }
+.verdict strong { font-size: 15.5px; }
+.verdict.ok { background: var(--ok-bg); } .verdict.ok strong { color: var(--ok); }
+.verdict.warn { background: var(--warn-bg); } .verdict.warn strong { color: var(--warn); }
+.verdict.bad { background: var(--bad-bg); } .verdict.bad strong { color: var(--bad); }
+.verdict ul { margin: 2px 0 0; padding-left: 18px; }
+.dev { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dev li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; }
+.dev .row strong { flex: 1; }
+.log details summary { cursor: pointer; list-style: none; display: grid; gap: 2px; }
+.log details summary::-webkit-details-marker { display: none; }
+.log details[open] summary { margin-bottom: 8px; }
+.log .res { margin: 0 0 8px; padding-left: 18px; font-size: 13.5px; display: grid; gap: 2px; }
 #radar { position: absolute; right: max(12px, var(--sr)); bottom: calc(var(--sb) + 84px); width: 104px; height: 104px;
   border-radius: 50%; background: var(--ar-glass); border: 1px solid var(--ar-line); cursor: pointer; }
 
@@ -215,7 +245,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .sw small { display: block; color: var(--muted); font-size: 12.5px; }
 .empty { padding: 18px; text-align: center; color: var(--muted); background: var(--surface); border-radius: 12px;
   border: 1px dashed var(--line); }
-.log li { background: var(--surface); padding: 10px 12px; display: grid; gap: 2px; }
+.log > li { background: var(--surface); padding: 10px 12px; display: grid; gap: 2px; }
 .mono { font-family: var(--mono); font-size: 12.5px; }
 
 #toast { position: fixed; z-index: 40; left: 50%; bottom: calc(var(--sb) + 96px); transform: translateX(-50%);
@@ -237,16 +267,18 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   <div id="hud">
     <div class="left">
       <span class="chip demo">DATA CONTOH</span>
-      <span class="chip" id="hMode">—</span>
+      <button class="chip" id="hMode" type="button" aria-label="Status peranti">—</button>
     </div>
     <div class="right">
       <span class="chip" id="hGps"><span class="dot" id="hGpsDot"></span><span id="hGpsTxt">Mencari GPS…</span></span>
       <span class="chip" id="hHead">—</span>
       <button class="chip" id="hRadius" type="button">Radius 40 m</button>
+      <button class="chip" id="hFreeze" type="button" aria-pressed="false">Bekukan</button>
     </div>
   </div>
-  <div id="banner" hidden></div>
-  <button class="chip" id="crowd" type="button" hidden></button>
+  <div id="banner" hidden><span id="bannerTxt"></span><div><button type="button" id="bannerAct" hidden></button></div></div>
+  <div id="state" role="status" aria-live="polite" hidden></div>
+  <button class="chip" id="crowd" type="button" hidden>Premis tersembunyi</button>
   <div class="edge" id="edgeL" hidden></div>
   <div class="edge" id="edgeR" hidden></div>
   <canvas id="radar" role="button" aria-label="Radar premis. Ketik untuk senarai." tabindex="0"></canvas>
@@ -257,10 +289,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
     <button class="tr" type="button" data-act="tr" aria-label="Pusing ke kanan">▶</button>
   </div>
   <nav id="bar">
-    <button type="button" id="bList">Senarai berdekatan</button>
-    <button type="button" id="bFilter">Tapis &amp; tetapan</button>
-    <button type="button" id="bUnlisted" class="hot">Premis tiada dalam senarai</button>
-    <button type="button" id="bLog">Log semakan</button>
+    <button type="button" id="bList">Senarai</button>
+    <button type="button" id="bFilter">Tapis</button>
+    <button type="button" id="bUnlisted" class="hot">Lapor premis</button>
+    <button type="button" id="bLog">Log</button>
   </nav>
 </div>
 
@@ -465,6 +497,7 @@ const S = {
   inspections: LS.get('inspections', []), pins: LS.get('pins', {}),
   sim: { truePos: null, jitter: false, noise: { n: 0, e: 0 } },
   selectedId: null, draft: null, firstFixAt: null, startedAt: 0,
+  geoState: 'idle', geoWatch: null, frozen: false, dirty: false,
 };
 const posOf = (p) => (S.pins[S.ds?.key] || {})[p.id] || p;
 function setDataset(ds) { S.ds = ds; S.premises = buildPremises(ds); labels.forEach((el) => el.remove()); labels.clear(); }
@@ -478,6 +511,8 @@ function toast(msg, ms = 3200) { const t = $('#toast'); t.textContent = msg; t.h
 
 /* ---------- start ---------- */
 if (!window.isSecureContext) $('#secureWarn').hidden = false;
+let looping = false;
+function startLoop() { if (!looping) { looping = true; requestAnimationFrame(frame); } }
 const lockStart = () => { $('#goField').disabled = true; $('#goSim').disabled = true; };
 $('#goField').addEventListener('click', () => { lockStart(); $('#goField').textContent = 'Meminta kebenaran…'; startField(); });
 $('#goSim').addEventListener('click', () => { lockStart(); startSim(); });
@@ -495,10 +530,7 @@ async function startField() {
   $('#hMode').textContent = 'LAPANGAN';
   requestWakeLock();
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-    video.srcObject = stream; video.hidden = false; await video.play(); S.camera = true;
-  } catch { S.camera = false; toast('Kamera tidak dapat dibuka. Paparan tanpa kamera digunakan.'); }
+  await openCamera();
 
   if (oriGranted) {
     const absEvt = 'ondeviceorientationabsolute' in window;
@@ -507,15 +539,36 @@ async function startField() {
   setTimeout(() => {
     if (!S.hasCompass && S.mode === 'field') {
       S.manualHeading = true; $('#turn').hidden = false; $('#turn .fw').hidden = true; $('#turn .bk').hidden = true;
-      toast('Kompas tidak tersedia. Seret skrin atau guna butang ◀ ▶ untuk pusing.', 5000);
+      toast('Kompas tidak tersedia. Seret skrin atau guna ◀ ▶ untuk pusing. Ketik chip LAPANGAN untuk butiran.', 5000);
     }
   }, 3000);
 
-  if ('geolocation' in navigator) {
-    navigator.geolocation.watchPosition(onPos, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
-  } else { onGeoErr({ code: 1 }); }
-  setTimeout(() => { if (!S.pos && S.mode === 'field') toast('Masih menunggu GPS. Pergi ke kawasan terbuka.', 4000); }, 12000);
-  requestAnimationFrame(frame);
+  startGps();
+  startLoop();
+}
+async function openCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    video.srcObject = stream; video.hidden = false; await video.play(); S.camera = true; S.cameraErr = null;
+  } catch (e) {
+    S.camera = false; video.hidden = true;
+    S.cameraErr = e && e.name === 'NotAllowedError' ? 'denied' : 'failed';
+    toast('Kamera tidak dapat dibuka. Paparan tanpa kamera digunakan.');
+  }
+}
+function startGps() {
+  if (!('geolocation' in navigator)) { S.geoState = 'unsupported'; return; }
+  S.geoState = 'waiting'; S.geoWaitFrom = Date.now();
+  if (S.geoWatch != null) navigator.geolocation.clearWatch(S.geoWatch);
+  S.geoWatch = navigator.geolocation.watchPosition(onPos, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+}
+function fieldToSim() {
+  if (S.geoWatch != null) navigator.geolocation.clearWatch(S.geoWatch);
+  video.srcObject?.getTracks().forEach((t) => t.stop()); video.srcObject = null; video.hidden = true;
+  S.pos = null; S.acc = null; S.ds = null; S.geoState = 'idle'; S.hasCompass = false; S.cameraErr = null;
+  window.removeEventListener('deviceorientationabsolute', onOrientation, true);
+  window.removeEventListener('deviceorientation', onOrientation, true);
+  startSim();
 }
 
 function startSim() {
@@ -527,8 +580,8 @@ function startSim() {
   setDataset(ds);
   S.sim.truePos = { ...TEST_SITE.point };                 // mid-street, facing row A (Blok A)
   setHeading(ds.brg + 90, true);
-  simTick(); setInterval(simTick, 1000);
-  requestAnimationFrame(frame);
+  simTick(); if (!S.simTimer) S.simTimer = setInterval(simTick, 1000);
+  startLoop();
   toast('Seret skrin atau guna ◀ ▶ untuk pusing, ▲ ▼ untuk berjalan.', 4500);
 }
 function simTick() {
@@ -558,6 +611,8 @@ function setHeading(h, hard) {
 }
 
 function onPos(p) {
+  if (S.mode !== 'field') return;
+  S.geoState = 'ok';
   S.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
   S.acc = p.coords.accuracy;
   if (!S.firstFixAt) S.firstFixAt = Date.now();
@@ -569,10 +624,9 @@ function onPos(p) {
   }
 }
 function onGeoErr(err) {
-  if (err.code === 1) {
-    toast('Lokasi tidak dibenarkan. Beralih ke data simulasi.', 4500);
-    if (!S.ds) { setDataset(siteDs(LS.get('siteBrg', 0))); S.pos = { ...TEST_SITE.point }; S.acc = null; }
-  }
+  if (S.mode !== 'field') return;
+  if (err.code === 1) S.geoState = 'denied';             // shown in the state panel, never a silent switch to simulation
+  else if (!S.pos) S.geoState = 'waiting';               // timeout / no signal yet: keep waiting
 }
 function placeAroundMe() {
   if (!S.pos) { toast('Belum ada kedudukan GPS.'); return; }
@@ -634,6 +688,7 @@ function project(p, W, H, f) {
 let lastHud = 0;
 function frame(ts) {
   requestAnimationFrame(frame);
+  if (S.frozen) { if (ts - lastHud > 250) { lastHud = ts; updateHud(S.lastIn || 0); } return; }
   const W = stage.clientWidth, H = stage.clientHeight;
   const f = (W / 2) / Math.tan(S.fovH / 2 * D2R);
   const ready = S.pos && S.premises.length;
@@ -673,6 +728,7 @@ function frame(ts) {
   const right = inR.filter((o) => o.rel > S.fovH / 2 + 6).sort((a, b) => a.d - b.d);
   edge($('#edgeL'), left, '◀ '); edge($('#edgeR'), right, '', ' ▶');
   drawRadar(items);
+  S.lastIn = inR.length;
   if (ts - lastHud > 250) { lastHud = ts; updateHud(inR.length); }
 }
 function edge(el, arr, pre, post = '') {
@@ -702,12 +758,94 @@ function updateHud(nIn) {
   else { txt.textContent = 'GPS ±' + Math.round(S.acc) + ' m'; dot.className = 'dot ' + (S.acc <= 15 ? 'ok' : S.acc <= 30 ? 'warn' : 'bad'); }
   $('#hHead').textContent = String(Math.round(S.heading)).padStart(3, '0') + '° ' + cardinal(S.heading);
   $('#hRadius').textContent = `${nIn} dalam ${S.radius} m`;
-  const b = $('#banner');
-  let msg = '';
-  if (S.acc != null && S.acc > 25) msg = `Ketepatan GPS rendah (±${Math.round(S.acc)} m). Label mungkin tersasar beberapa kedai. Sahkan nama pada papan tanda.`;
+  let msg = '', act = null;
+  if (S.frozen) msg = 'Paparan dibekukan. Ketik label untuk semak, atau ketik Bekukan untuk sambung.';
+  else if (S.acc != null && S.acc > 25) msg = `Ketepatan GPS rendah (±${Math.round(S.acc)} m). Label mungkin tersasar beberapa kedai. Sahkan nama pada papan tanda.`;
   else if (S.compassAcc != null && S.compassAcc > 25) msg = 'Kompas kurang tepat. Gerakkan telefon dalam bentuk angka 8 untuk kalibrasi.';
-  else if (S.pos && S.ds && !nIn) msg = `Tiada premis dalam ${S.radius} m. Besarkan radius atau buka Senarai berdekatan.`;
-  b.hidden = !msg; if (msg && b.textContent !== msg) b.textContent = msg;
+  else if (S.pos && S.ds && !nIn) {
+    msg = `Tiada premis dalam ${S.radius} m.`;
+    act = S.radius < 150 ? { id: 'grow', text: `Besarkan radius ke ${Math.min(150, S.radius * 2)} m` } : { id: 'list', text: 'Buka senarai' };
+  }
+  const b = $('#banner'), bt = $('#bannerTxt'), ba = $('#bannerAct');
+  b.style.top = Math.round($('#hud').getBoundingClientRect().bottom + 8) + 'px';   // always below the (wrapping) HUD
+  b.hidden = !msg; if (bt.textContent !== msg) bt.textContent = msg;
+  ba.hidden = !act; if (act && ba.dataset.act !== act.id + act.text) { ba.dataset.act = act.id + act.text; ba.textContent = act.text; ba.dataset.id = act.id; }
+  // device chip: mode + how many sensors need attention
+  const issues = deviceIssues().length, m = $('#hMode');
+  const mt = (S.mode === 'sim' ? 'SIMULASI' : 'LAPANGAN') + (issues ? ` · ${issues} isu` : '');
+  if (m.textContent !== mt) { m.textContent = mt; m.classList.toggle('warnchip', !!issues); m.setAttribute('aria-label', `${mt}. Status peranti`); }
+  renderState();
+}
+function deviceIssues() {
+  if (S.mode !== 'field') return [];
+  const out = [];
+  if (!S.camera) out.push('camera');
+  if (S.geoState !== 'ok') out.push('gps');
+  if (!S.hasCompass) out.push('compass');
+  return out;
+}
+/* centred panel for the states where the camera view has nothing useful to show */
+function renderState() {
+  const el = $('#state');
+  let key = '', html = '';
+  if (S.mode === 'field' && (S.geoState === 'denied' || S.geoState === 'unsupported')) {
+    key = 'denied';
+    html = `<h2>Lokasi tidak dibenarkan</h2>
+      <p>Aplikasi perlukan lokasi untuk mencari premis berdekatan.</p>
+      <p><strong>iPhone:</strong> Tetapan → Privasi → Perkhidmatan Lokasi → Safari → Semasa Digunakan.<br>
+        <strong>Android:</strong> ketik ikon kunci di bar alamat → Kebenaran → Lokasi → Benarkan.</p>
+      <div class="btns"><button class="btn primary" type="button" data-state="reload">Muat semula selepas dibenarkan</button>
+        <button class="btn" type="button" data-state="sim">Guna mod simulasi</button></div>`;
+  } else if (S.mode === 'field' && !S.pos) {
+    const secs = Math.round((Date.now() - (S.geoWaitFrom || Date.now())) / 1000);
+    key = 'wait' + (secs >= 15 ? 'long' : '');
+    html = `<h2><span class="spin" aria-hidden="true"></span>Mencari isyarat GPS…</h2>
+      <p>Biasanya 5–20 saat. Berdiri di kawasan terbuka, jauh dari bumbung dan bangunan tinggi.</p>
+      <p class="secs" aria-hidden="true">${secs} s</p>` +
+      (secs >= 15 ? `<p>Masih tiada isyarat. Pastikan Lokasi telefon dihidupkan.</p>
+      <div class="btns"><button class="btn" type="button" data-state="sim">Guna mod simulasi</button></div>` : '');
+    if (el.dataset.key === key) { const sc = el.querySelector('.secs'); if (sc) sc.textContent = secs + ' s'; return; }
+  }
+  if (!key) { el.hidden = true; el.dataset.key = ''; return; }
+  if (el.dataset.key !== key) { el.dataset.key = key; el.innerHTML = html; }
+  el.hidden = false;
+}
+$('#state').addEventListener('click', (e) => {
+  const a = e.target.closest('[data-state]')?.dataset.state;
+  if (a === 'reload') location.reload();
+  if (a === 'sim') fieldToSim();
+});
+$('#bannerAct').addEventListener('click', (e) => {
+  if (e.target.dataset.id === 'grow') { S.radius = Math.min(150, S.radius * 2); LS.set('radius', S.radius); }
+  else openList();
+});
+$('#hFreeze').addEventListener('click', (e) => {
+  S.frozen = !S.frozen; e.currentTarget.setAttribute('aria-pressed', String(S.frozen));
+  e.currentTarget.textContent = S.frozen ? 'Dibekukan' : 'Bekukan';
+});
+$('#hMode').addEventListener('click', openDevice);
+function openDevice() {
+  const cam = S.mode === 'sim' ? ['ok', 'Tidak digunakan (simulasi)', ''] : S.camera ? ['ok', 'Berfungsi', ''] :
+    [S.cameraErr === 'denied' ? 'bad' : 'warn', S.cameraErr === 'denied' ? 'Tidak dibenarkan' : 'Tidak dapat dibuka',
+      'iPhone: Tetapan → Safari → Kamera → Benarkan. Android: ikon kunci di bar alamat → Kebenaran → Kamera. Tutup aplikasi lain yang guna kamera.'];
+  const gps = S.mode === 'sim' ? ['ok', S.sim.jitter ? 'Simulasi dengan ralat ±12 m' : 'Simulasi', ''] :
+    S.geoState === 'ok' ? [S.acc <= 15 ? 'ok' : S.acc <= 30 ? 'warn' : 'bad', `±${Math.round(S.acc)} m`, S.acc > 15 ? 'Ketepatan rendah di antara bangunan adalah biasa. Bergerak ke kawasan lebih terbuka.' : ''] :
+    S.geoState === 'denied' || S.geoState === 'unsupported' ? ['bad', 'Tidak dibenarkan', 'Benarkan Lokasi untuk pelayar ini, kemudian muat semula.'] :
+    ['warn', 'Mencari isyarat…', 'Berdiri di kawasan terbuka.'];
+  const cmp = S.mode === 'sim' ? ['ok', 'Manual (simulasi)', ''] : S.hasCompass ?
+    [S.compassAcc > 25 ? 'warn' : 'ok', S.compassAcc != null ? `Berfungsi (±${Math.round(S.compassAcc)}°)` : 'Berfungsi', 'Jika label tersasar ke kiri/kanan: gerakkan telefon dalam bentuk angka 8, jauhi kenderaan dan pintu besi.'] :
+    ['warn', 'Manual', 'iPhone: muat semula dan ketik Benarkan pada soalan Gerakan & Orientasi. Seret skrin atau guna ◀ ▶ untuk pusing.'];
+  const row = (name, [k, v, fix]) => `<li><div class="row"><span class="ldot ${k}" aria-hidden="true"></span><strong>${name}</strong><span>${esc(v)}</span></div>${fix ? `<span class="fine">${esc(fix)}</span>` : ''}</li>`;
+  openSheet(`<div class="sh">${head('Status peranti')}
+    <ul class="dev">${row('Kamera', cam)}${row('GPS', gps)}${row('Kompas', cmp)}</ul>
+    <div class="row">${S.mode === 'field' && !S.camera ? `<button class="btn sm" type="button" id="dCam">Cuba buka kamera semula</button>` : ''}
+      ${S.mode === 'field' ? `<button class="btn sm" type="button" id="dSim">Tukar ke mod simulasi</button>` : ''}</div>
+  </div>`, 'Status peranti');
+  $('#dCam')?.addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = 'Membuka kamera…';
+    await openCamera(); closeSheet(true); toast(S.camera ? 'Kamera dibuka.' : 'Kamera masih tidak dapat dibuka.');
+  });
+  $('#dSim')?.addEventListener('click', () => { closeSheet(true); fieldToSim(); });
 }
 
 /* simulated street when there is no camera: shopfront blocks, horizon and compass ticks */
@@ -772,14 +910,31 @@ function openSheet(html, label) {
   if (sheet.hidden) sheetOpener = document.activeElement;
   S.dirty = false; closeArmed = false;
   sheetBody.innerHTML = html; sheet.setAttribute('aria-label', label); sheet.hidden = false; scrim.hidden = false; sheet.scrollTop = 0;
+  stage.inert = true;
+  if (!sheetHist) { try { history.pushState({ sheet: 1 }, ''); sheetHist = true; } catch { sheetHist = false; } }
   sheetBody.querySelector('[data-close]')?.focus({ preventScroll: true });
 }
+let sheetHist = false;                                    // Android Back closes the sheet instead of leaving the app
+window.addEventListener('popstate', () => {
+  if (!sheetHist || sheet.hidden) return;
+  sheetHist = false;
+  if (S.dirty && !closeArmed) {
+    closeArmed = true; toast('Semakan belum disimpan. Tekan Kembali sekali lagi untuk buang.', 4000);
+    try { history.pushState({ sheet: 1 }, ''); sheetHist = true; } catch { /* ignore */ }
+    return;
+  }
+  hideSheet();
+});
 function closeSheet(force) {
   if (sheet.hidden) return;
   if (S.dirty && !force && !closeArmed) {             // unsaved checklist / report: ask once
     closeArmed = true; toast('Semakan belum disimpan. Tutup sekali lagi untuk buang.', 4000); return;
   }
-  sheet.hidden = true; scrim.hidden = true; S.selectedId = null; S.draft = null; S.dirty = false;
+  hideSheet();
+  if (sheetHist) { sheetHist = false; try { history.back(); } catch { /* ignore */ } }
+}
+function hideSheet() {
+  sheet.hidden = true; scrim.hidden = true; stage.inert = false; S.selectedId = null; S.draft = null; S.dirty = false;
   if (sheetOpener && sheetOpener.isConnected && !sheetOpener.hidden) sheetOpener.focus({ preventScroll: true });
   sheetOpener = null;
 }
@@ -829,11 +984,23 @@ function openPremise(id) {
   const daysTxt = p.suspended ? 'lesen digantung' : st.days < 0 ? `tamat ${-st.days} hari lalu` : `${st.days} hari lagi`;
   const rules = rulesFor(p.type);
   const prev = S.inspections.filter((x) => x.premiseId === id && x.dsKey === S.ds.key);
+  const issues = [];
+  if (p.suspended) issues.push('Lesen digantung');
+  else if (st.days < 0) issues.push(`Lesen tamat ${-st.days} hari lalu (${fmtDate(p.expiry)})`);
+  else if (st.days <= 30) issues.push(`Lesen tamat dalam ${st.days} hari (${fmtDate(p.expiry)})`);
+  if (p.compound) issues.push(`Kompaun tertunggak RM ${p.compound.toLocaleString('ms-MY')}`);
+  const lastPrev = prev[prev.length - 1];
+  if (lastPrev && lastPrev.outcome === 'Tidak patuh') issues.push(`Semakan lepas tidak patuh (${fmtTime(lastPrev.at)})`);
+  const vKey = st.key === 'bad' || p.compound ? 'bad' : issues.length ? 'warn' : 'ok';
+  const verdict = issues.length
+    ? `<div class="verdict ${vKey}"><strong>${issues.length} perkara perlu tindakan</strong><ul>${issues.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`
+    : `<div class="verdict ok"><strong>Lesen sah</strong><span>Sah sehingga ${fmtDate(p.expiry)}. Tiada kompaun tertunggak.</span></div>`;
   openSheet(`<div class="sh">
     <div class="shead"><div class="row"><span class="tag">${TYPES[p.type].code}</span><span class="pill ${st.key}">${st.label}</span></div>
       <button class="x" type="button" data-close>Tutup</button></div>
     <header class="ph"><h2>${esc(p.trade)}</h2><p class="sub">${esc(p.reg)}</p>
       <p class="sub">${esc(p.unit)}${d != null ? ` · ${d} m ${relWord(rel)}` : ''}</p></header>
+    ${verdict}
     <dl class="facts">
       <div><dt>No. lesen</dt><dd class="mono">${esc(p.licNo)}</dd></div>
       <div><dt>Jenis lesen</dt><dd>${TYPES[p.type].label}</dd></div>
@@ -850,6 +1017,7 @@ function openPremise(id) {
         <div class="seg" role="group" aria-label="${esc(r.text)}">
           <button type="button" data-v="ok" aria-pressed="false">Patuh</button><button type="button" data-v="no" aria-pressed="false">Tidak patuh</button><button type="button" data-v="na" aria-pressed="false" title="Tidak berkenaan">T/B</button>
         </div></li>`).join('')}</ol>
+      <button class="btn sm" type="button" id="allOk" style="margin-top:10px">Tandakan baki sebagai Patuh</button>
     </section>
     <section><h3>Bukti</h3>
       <div class="thumbs" id="thumbs"></div>
@@ -865,6 +1033,16 @@ function openPremise(id) {
   </div>`, p.trade);
 
   const chk = sheetBody.querySelector('.chk');
+  $('#allOk').addEventListener('click', () => {
+    let n = 0;
+    chk.querySelectorAll('li[data-rule]').forEach((li) => {
+      if (S.draft.results[li.dataset.rule]) return;
+      S.draft.results[li.dataset.rule] = 'ok'; n++;
+      li.querySelectorAll('button[data-v]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === 'ok')));
+    });
+    if (n) { S.dirty = true; closeArmed = false; }
+    updateOutcome(rules); toast(n ? `${n} perkara ditandakan Patuh.` : 'Semua perkara sudah ditandakan.', 2000);
+  });
   chk.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-v]'); if (!b) return;
     const li = b.closest('li'), rid = li.dataset.rule;
@@ -932,7 +1110,7 @@ function saveInspection(p, rules) {
   const ok = persistInspections(rec);
   closeSheet(true);
   toast(ok === true ? `Semakan disimpan: ${rec.outcome}.` : ok === 'nophoto' ? 'Storan penuh. Semakan disimpan tanpa gambar.' : 'Gagal menyimpan. Storan pelayar tidak tersedia.');
-  $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
+  $('#bLog').textContent = `Log (${S.inspections.length})`;
 }
 
 function openUnlisted() {
@@ -960,7 +1138,7 @@ function openUnlisted() {
       at: Date.now(), pos: S.pos, acc: S.acc, heading: Math.round(S.heading), outcome: 'Untuk siasatan', notes: $('#notes').value.trim(), photos: S.draft.photos };
     const ok = persistInspections(rec); closeSheet(true);
     toast(ok ? 'Laporan premis tiada dalam senarai disimpan.' : 'Gagal menyimpan.');
-    $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
+    $('#bLog').textContent = `Log (${S.inspections.length})`;
   });
 }
 
@@ -1003,11 +1181,20 @@ function openFilters() {
 
 function openLog() {
   const recs = [...S.inspections].reverse();
-  const li = recs.map((r) => `<li><div class="row" style="justify-content:space-between"><strong>${esc(r.trade)}</strong>` +
-    `<span class="pill ${r.outcome === 'Patuh' ? 'ok' : r.outcome === 'Tidak patuh' ? 'bad' : 'warn'}">${esc(r.outcome)}</span></div>` +
-    `<span class="fine">${fmtTime(r.at)} · ${r.kind === 'unlisted' ? 'Tiada dalam senarai' : esc(r.licNo)} · ${r.photos.length} gambar${r.photosDropped ? ' (dibuang, storan penuh)' : ''}</span>` +
-    (r.failed?.length ? `<span class="fine" style="color:var(--bad)">${r.failed.map(esc).join('; ')}</span>` : '') +
-    (r.notes ? `<span class="fine">“${esc(r.notes)}”</span>` : '') + `</li>`).join('');
+  const V = { ok: 'Patuh', no: 'Tidak patuh', na: 'T/B' };
+  const li = recs.map((r) => {
+    const rules = r.kind === 'premise' ? rulesFor(r.type) : [];
+    const res = rules.filter((x) => r.results?.[x.id]).map((x) => `<li><strong>${V[r.results[x.id]]}</strong> · ${esc(x.text)}</li>`).join('');
+    return `<li><details><summary><span class="row" style="justify-content:space-between"><strong>${esc(r.trade)}</strong>` +
+      `<span class="pill ${r.outcome === 'Patuh' ? 'ok' : r.outcome === 'Tidak patuh' ? 'bad' : 'warn'}">${esc(r.outcome)}</span></span>` +
+      `<span class="fine">${fmtTime(r.at)} · ${r.kind === 'unlisted' ? 'Tiada dalam senarai' : esc(r.licNo)} · ${r.photos.length} gambar${r.photosDropped ? ' (dibuang, storan penuh)' : ''}</span>` +
+      (r.failed?.length ? `<span class="fine" style="color:var(--bad)">${r.failed.map(esc).join('; ')}</span>` : '') + `</summary>` +
+      (res ? `<ul class="res">${res}</ul>` : '') +
+      (r.notes ? `<p class="fine">Catatan: ${esc(r.notes)}</p>` : '') +
+      (r.pos ? `<p class="fine mono">${r.pos.lat.toFixed(6)}, ${r.pos.lng.toFixed(6)} ±${r.acc != null ? Math.round(r.acc) : '?'} m · arah ${r.heading}°</p>` : '') +
+      (r.photos.length ? `<div class="thumbs">${r.photos.map((src, i) => `<img src="${src}" width="160" height="120" alt="Gambar bukti ${i + 1}, ${esc(r.trade)}">`).join('')}</div>` : '') +
+      `</details></li>`;
+  }).join('');
   openSheet(`<div class="sh">${head('Log semakan')}
     <p class="note">Disimpan dalam pelayar telefon ini sahaja. Dalam sistem sebenar, rekod dihantar ke pelayan dengan jejak audit.</p>
     ${li ? `<ul class="list log">${li}</ul>` : `<div class="empty">Belum ada semakan. Ketik label premis untuk mula.</div>`}
@@ -1021,10 +1208,10 @@ function openLog() {
   });
   $('#clr')?.addEventListener('click', (e) => {
     if (e.target.dataset.armed !== '1') { e.target.dataset.armed = '1'; e.target.textContent = 'Ketik lagi untuk padam semua'; return; }
-    S.inspections = []; LS.set('inspections', []); $('#bLog').textContent = 'Log semakan'; openLog();
+    S.inspections = []; LS.set('inspections', []); $('#bLog').textContent = 'Log'; openLog();
   });
 }
-if (S.inspections.length) $('#bLog').textContent = `Log semakan (${S.inspections.length})`;
+if (S.inspections.length) $('#bLog').textContent = `Log (${S.inspections.length})`;
 
 /* ---------- PWA ---------- */
 if ('serviceWorker' in navigator && window.isSecureContext && /^https?:$/.test(location.protocol)) {

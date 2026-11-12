@@ -1,5 +1,5 @@
 // Semak Premis AR prototype: cache the app shell so it opens offline in the field.
-const CACHE = 'semak-premis-v3';
+const CACHE = 'semak-premis-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
